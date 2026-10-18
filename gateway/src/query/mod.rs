@@ -2,7 +2,7 @@ use axum::http::StatusCode;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::auth::AuthUser;
 
@@ -70,10 +70,92 @@ pub struct TrinoRouter {
 impl TrinoRouter {
     pub fn new(config: TrinoConfig) -> Self {
         let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(300))
+            .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("Failed to create HTTP client");
         Self { client, config }
+    }
+
+    /// Validates that the submitted SQL is strictly read-only, free from statement-chaining injection,
+    /// and enforces bounded result limits.
+    pub fn validate_and_secure_query(
+        &self,
+        raw_sql: &str,
+        _auth: &AuthUser,
+    ) -> Result<String, StatusCode> {
+        let trimmed = raw_sql.trim();
+        if trimmed.is_empty() {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        // 1. Strip string literals to safely inspect SQL tokens and semicolons without false positives
+        let mut in_quote = false;
+        let mut quote_char = ' ';
+        let mut stripped = String::with_capacity(trimmed.len());
+
+        for c in trimmed.chars() {
+            if !in_quote && (c == '\'' || c == '"') {
+                in_quote = true;
+                quote_char = c;
+                stripped.push(c);
+            } else if in_quote && c == quote_char {
+                in_quote = false;
+                stripped.push(c);
+            } else if in_quote {
+                stripped.push(' ');
+            } else {
+                stripped.push(c);
+            }
+        }
+
+        // Check for statement chaining (unquoted semicolons followed by other commands)
+        let statements: Vec<&str> = stripped
+            .split(';')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if statements.len() > 1 {
+            warn!("Blocked query containing multiple chained SQL statements");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        // 2. Reject destructive / data-modification statements
+        let upper_clean = stripped.to_uppercase();
+        let tokens: Vec<&str> = upper_clean
+            .split_whitespace()
+            .map(|s| s.trim_matches(|p| p == '(' || p == ')' || p == ',' || p == ';'))
+            .collect();
+
+        let prohibited_keywords = [
+            "DROP", "ALTER", "TRUNCATE", "DELETE", "UPDATE", "INSERT", "CREATE", "GRANT", "REVOKE",
+            "CALL", "EXECUTE", "SHUTDOWN", "SET",
+        ];
+
+        for kw in prohibited_keywords {
+            if tokens.contains(&kw) {
+                warn!("Blocked query with prohibited DDL/DML keyword: {}", kw);
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
+
+        // 3. Ensure statement starts with an allowed read-only verb
+        let first_token = tokens.first().copied().unwrap_or("");
+        if !["SELECT", "WITH", "SHOW", "DESCRIBE", "EXPLAIN"].contains(&first_token) {
+            warn!(
+                "Blocked statement not starting with read-only verb: {}",
+                first_token
+            );
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        // 4. Enforce bounded result limit (max 1000 rows)
+        let mut final_sql = trimmed.trim_end_matches(';').trim().to_string();
+        if !upper_clean.contains("LIMIT") {
+            final_sql = format!("{} LIMIT 1000", final_sql);
+        }
+
+        Ok(final_sql)
     }
 
     pub async fn execute_query(
@@ -83,11 +165,13 @@ impl TrinoRouter {
     ) -> Result<QueryResult, StatusCode> {
         auth.require_query()?;
 
-        let full_sql = self.wrap_query(sql);
+        let full_sql = self.validate_and_secure_query(sql, auth)?;
         let url = format!("{}/v1/statement", self.config.coordinator_url);
 
         info!(
-            "Executing Trino query: {}",
+            "Executing Trino query for user {} (tenant {}): {}",
+            auth.claims.sub,
+            auth.claims.tenant_id,
             &full_sql[..full_sql.len().min(100)]
         );
 
@@ -162,19 +246,6 @@ impl TrinoRouter {
             stats: result.stats,
         })
     }
-
-    fn wrap_query(&self, sql: &str) -> String {
-        let trimmed = sql.trim().to_uppercase();
-        if trimmed.starts_with("SELECT")
-            || trimmed.starts_with("WITH")
-            || trimmed.starts_with("SHOW")
-            || trimmed.starts_with("DESCRIBE")
-        {
-            sql.to_string()
-        } else {
-            format!("SELECT * FROM ({}) LIMIT 1000", sql)
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
@@ -197,14 +268,60 @@ pub async fn execute_trino_query(
     trino_query: TrinoQuery,
     trino: axum::extract::Extension<Arc<TrinoRouter>>,
 ) -> Result<axum::Json<QueryResult>, StatusCode> {
-    let sql = trino_query.query;
-    let limit = 1000;
-    let sql = if sql.to_uppercase().contains("LIMIT") {
-        sql
-    } else {
-        format!("{} LIMIT {}", sql.trim(), limit)
-    };
-
-    let result = trino.execute_query(&sql, &user).await?;
+    let result = trino.execute_query(&trino_query.query, &user).await?;
     Ok(axum::Json(result))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::Claims;
+
+    fn test_auth_user() -> AuthUser {
+        AuthUser {
+            claims: Claims {
+                sub: "alice".into(),
+                role: "analyst".into(),
+                tenant_id: "tenant-a".into(),
+                exp: 9999999999,
+                iat: 1000000000,
+            },
+        }
+    }
+
+    #[test]
+    fn test_valid_select_query_adds_limit() {
+        let router = TrinoRouter::new(TrinoConfig::default());
+        let auth = test_auth_user();
+        let res = router.validate_and_secure_query("SELECT * FROM hosts", &auth);
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), "SELECT * FROM hosts LIMIT 1000");
+    }
+
+    #[test]
+    fn test_blocked_drop_table() {
+        let router = TrinoRouter::new(TrinoConfig::default());
+        let auth = test_auth_user();
+        let res = router.validate_and_secure_query("DROP TABLE hosts", &auth);
+        assert_eq!(res.unwrap_err(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn test_blocked_statement_chaining() {
+        let router = TrinoRouter::new(TrinoConfig::default());
+        let auth = test_auth_user();
+        let res =
+            router.validate_and_secure_query("SELECT * FROM hosts; DELETE FROM services;", &auth);
+        assert_eq!(res.unwrap_err(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_allowed_quoted_keywords() {
+        let router = TrinoRouter::new(TrinoConfig::default());
+        let auth = test_auth_user();
+        // Quoted string containing "DROP TABLE" must not falsely trigger token prohibition
+        let res = router
+            .validate_and_secure_query("SELECT * FROM hosts WHERE name = 'DROP TABLE'", &auth);
+        assert!(res.is_ok());
+    }
 }

@@ -7,6 +7,8 @@ use tokio::sync::RwLock;
 
 use crate::auth::AuthUser;
 
+const MAX_LIMITERS: usize = 10_000;
+
 #[derive(Debug, Clone)]
 pub struct RateLimitConfig {
     pub requests_per_second: u32,
@@ -56,6 +58,16 @@ impl TokenBucketRateLimiter {
         }
 
         let mut limiters = self.limiters.write().await;
+        // Bounded capacity check: prevent unbounded memory accumulation
+        if limiters.len() >= MAX_LIMITERS {
+            // Prune down to 75% capacity to prevent memory exhaustion under key spray attacks
+            let keys_to_remove: Vec<String> =
+                limiters.keys().take(MAX_LIMITERS / 4).cloned().collect();
+            for k in keys_to_remove {
+                limiters.remove(&k);
+            }
+        }
+
         let quota = Quota::per_second(NonZeroU32::new(self.config.requests_per_second).unwrap())
             .allow_burst(NonZeroU32::new(self.config.burst_size).unwrap());
 
@@ -64,10 +76,13 @@ impl TokenBucketRateLimiter {
         limiter
     }
 
+    /// Fast non-blocking rate check: returns TOO_MANY_REQUESTS immediately instead of hanging threads
     pub async fn check_rate_limit(&self, key: &str) -> Result<(), StatusCode> {
         let limiter = self.get_limiter(key).await;
-        limiter.until_ready().await;
-        Ok(())
+        match limiter.check() {
+            Ok(()) => Ok(()),
+            Err(_) => Err(StatusCode::TOO_MANY_REQUESTS),
+        }
     }
 }
 
@@ -90,4 +105,27 @@ pub async fn rate_limit_status(
         allowed,
         remaining: if allowed { 1 } else { 0 },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_rate_limiter_immediate_rejection() {
+        let config = RateLimitConfig {
+            requests_per_second: 1,
+            burst_size: 1,
+        };
+        let limiter = TokenBucketRateLimiter::new(config);
+
+        // First request allowed
+        assert!(limiter.check_rate_limit("test-user").await.is_ok());
+
+        // Immediate subsequent request must be rejected with 429 without blocking
+        assert_eq!(
+            limiter.check_rate_limit("test-user").await.unwrap_err(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+    }
 }

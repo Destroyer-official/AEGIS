@@ -119,8 +119,24 @@ def test_synthetic_data_generation():
 
 
 def test_onnx_export(tmp_path):
+    import pytest
+
     output_path = tmp_path / "test_model.onnx"
-    res_path = export_onnx(checkpoint_path="/nonexistent/dqn.pt", output_path=str(output_path))
+
+    # 1. Must fail closed if checkpoint does not exist and allow_untrained is False
+    with pytest.raises(FileNotFoundError):
+        export_onnx(
+            checkpoint_path="/nonexistent/dqn.pt",
+            output_path=str(output_path),
+            allow_untrained=False,
+        )
+
+    # 2. When allow_untrained=True is explicitly passed (e.g. test harness), verify ONNX architecture
+    res_path = export_onnx(
+        checkpoint_path="/nonexistent/dqn.pt",
+        output_path=str(output_path),
+        allow_untrained=True,
+    )
     assert os.path.exists(res_path)
     assert os.path.getsize(res_path) > 1000
 

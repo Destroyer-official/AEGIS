@@ -16,20 +16,34 @@ def export_onnx(
     checkpoint_path: str = "/tmp/aegis/checkpoints/dqn_global_final.pt",
     output_path: str = "triton_model_repository/6hit_dqn/1/model.onnx",
     opset_version: int = 17,
+    allow_untrained: bool = False,
 ):
-    """Export trained DQN to ONNX format."""
+    """Export trained DQN to ONNX format.
 
-    # Load model
+    Fails closed if checkpoint is not found unless allow_untrained=True is explicitly set
+    (e.g. for CI/local pipeline structure testing).
+    """
     model = DuelingDQN(state_dim=STATE_DIM, action_dim=ACTION_DIM)
+
+    permit_untrained = (
+        allow_untrained
+        or os.environ.get("AEGIS_ALLOW_UNTRAINED_MODEL", "false").lower() in ("1", "true")
+    )
 
     if os.path.exists(checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
         # Handle both checkpoint formats
         state_dict = checkpoint.get("policy", checkpoint.get("model", checkpoint))
         model.load_state_dict(state_dict)
-        print(f"Loaded checkpoint from {checkpoint_path}")
+        print(f"Loaded trained checkpoint from {checkpoint_path}")
+    elif permit_untrained:
+        print(f"WARNING: Checkpoint not found at {checkpoint_path}, permitted untrained weights (allow_untrained=True)")
     else:
-        print(f"Checkpoint not found at {checkpoint_path}, using random weights")
+        raise FileNotFoundError(
+            f"Production model checkpoint required but not found at '{checkpoint_path}'. "
+            "Untrained models cannot be exported to production Triton repository. "
+            "To permit untrained weights for structural testing, pass allow_untrained=True."
+        )
 
     model.eval()
 

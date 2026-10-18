@@ -27,7 +27,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::ws::ws_stream_handler;
 use audit_log::{audit_middleware, AuditLog};
-use auth::{create_token, AuthUser, Claims, JwtConfig, LoginRequest, TokenResponse};
+use auth::{create_token, AuthUser, Claims, JwtConfig, LoginRequest, TokenResponse, UserStore};
 use middleware::{
     authz_middleware, init_tracing, require_admin, require_analyst, require_viewer,
     trace_middleware,
@@ -38,8 +38,8 @@ use query::{
 };
 use rate_limit::{rate_limit_status, RateLimitConfig, RateLimitStatus, TokenBucketRateLimiter};
 use tenant::{
-    query_quota_middleware, scan_quota_middleware, tenant_isolation_middleware, TenantConfig,
-    TenantStore,
+    query_quota_middleware, scan_quota_middleware, tenant_isolation_middleware,
+    CreateApiKeyResponse, TenantApiKey, TenantConfig, TenantStore,
 };
 
 #[derive(OpenApi)]
@@ -52,7 +52,8 @@ use tenant::{
     paths(health, login, query_handler, rate_limit_handler, admin_action, manage_users),
     components(schemas(
         HealthResponse, TokenResponse, LoginRequest, QueryResult, RateLimitStatus,
-        TrinoQuery, TrinoStatementStats, ColumnDef, Claims, ErrorResponse
+        TrinoQuery, TrinoStatementStats, ColumnDef, Claims, ErrorResponse,
+        CreateApiKeyResponse, TenantApiKey
     )),
     tags(
         (name = "health", description = "Health check endpoints"),
@@ -129,27 +130,30 @@ async fn login(request: axum::extract::Request) -> Result<Json<TokenResponse>, S
         .cloned()
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let user_store = request
+        .extensions()
+        .get::<Arc<UserStore>>()
+        .cloned()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let body = axum::body::to_bytes(request.into_body(), usize::MAX)
         .await
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let payload: LoginRequest =
         serde_json::from_slice(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
-    let role = if payload.password.starts_with("admin") {
-        "admin"
-    } else if payload.password.starts_with("analyst") {
-        "analyst"
-    } else if payload.password.starts_with("viewer") {
-        "viewer"
-    } else {
-        return Err(StatusCode::UNAUTHORIZED);
-    };
+
+    // Authenticate with Argon2id hashed credentials against user database
+    let user = user_store
+        .authenticate(&payload.username, &payload.password)
+        .await
+        .ok_or(StatusCode::UNAUTHORIZED)?;
 
     let now = Utc::now().timestamp() as usize;
     let claims = Claims {
-        sub: payload.username.clone(),
-        role: role.to_string(),
-        tenant_id: "tenant-a".to_string(),
+        sub: user.username.clone(),
+        role: user.role.to_string(),
+        tenant_id: user.tenant_id.clone(),
         exp: now + config.expiration_secs as usize,
         iat: now,
     };
@@ -345,6 +349,7 @@ async fn main() {
     let _tracer_provider = init_tracing("aegis-gateway");
 
     let jwt_config = Arc::new(JwtConfig::from_env());
+    let user_store = Arc::new(UserStore::new());
     let trino_config = TrinoConfig::default();
     let trino = Arc::new(TrinoRouter::new(trino_config));
     let rate_limit_config = RateLimitConfig::default();
@@ -357,7 +362,10 @@ async fn main() {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let grpc_service = Arc::new(GrpcQueryService::new(Arc::clone(&trino)));
+    let grpc_service = Arc::new(GrpcQueryService::new(
+        Arc::clone(&trino),
+        Arc::clone(&jwt_config),
+    ));
     let grpc_service_for_server = (*grpc_service).clone();
 
     let admin_routes = Router::new()
@@ -405,6 +413,7 @@ async fn main() {
         .merge(protected_routes)
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(Extension(jwt_config))
+        .layer(Extension(Arc::clone(&user_store)))
         .layer(Extension(Arc::clone(&trino)))
         .layer(Extension(grpc_service))
         .layer(Extension(Arc::clone(&rate_limiter)))

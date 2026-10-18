@@ -34,7 +34,8 @@ prost = "0.13"
 # Rate limiting
 governor = "0.8"
 tokio-stream = "0.1"
-md5 = "0.7"
+sha2 = "0.10"
+argon2 = "0.5"
 
 # Audit signing
 ed25519-dalek = "2.1"

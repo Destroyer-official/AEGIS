@@ -115,7 +115,10 @@ async fn handle_stream_socket(
                             batch_size,
                         });
 
-                        match grpc_service.execute_stream_query(request).await {
+                        match grpc_service
+                            .execute_stream_query_as_user(request, &user)
+                            .await
+                        {
                             Ok(response) => {
                                 let mut stream = response.into_inner();
                                 while let Some(chunk) = stream.next().await {

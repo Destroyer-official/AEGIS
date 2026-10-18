@@ -124,12 +124,25 @@ function ScanResults({ results }) {
   );
 }
 
+function sanitizeTarget(target) {
+  return (target || '').replace(/[^a-zA-Z0-9.:/-]/g, '');
+}
+
+function sanitizePortRange(ports) {
+  return (ports || '').replace(/[^0-9,-]/g, '');
+}
+
 function ScanTimeline({ timeline }) {
   if (timeline.length === 0) return null;
 
   return (
     <div className="scan-timeline">
-      <h3>Live Throughput</h3>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+        <h3 style={{ margin: 0 }}>Live Throughput</h3>
+        <span style={{ fontSize: '0.75rem', background: '#1e293b', color: '#38bdf8', padding: '2px 8px', borderRadius: '4px', border: '1px solid #334155' }}>
+          Live Stream
+        </span>
+      </div>
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={timeline}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -158,12 +171,13 @@ export default function ScanOrchestration() {
     const token = localStorage.getItem('aegis_token');
     if (!token) return;
 
+    const safeScanId = (scanId || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const ws = new WebSocket(`${WS_BASE}/ws/stream?token=${token}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
       ws.send(JSON.stringify({
-        sql: `SELECT * FROM aegis.scan_results WHERE scan_id = '${scanId}' ORDER BY ts DESC LIMIT 100`,
+        sql: `SELECT * FROM aegis.scan_results WHERE scan_id = '${safeScanId}' ORDER BY ts DESC LIMIT 100`,
         batch_size: 50,
       }));
     };
@@ -184,10 +198,12 @@ export default function ScanOrchestration() {
             return [...newResults, ...prev].slice(0, 500);
           });
         }
-        if (msg.query_id) {
+        if (msg.query_id || msg.rows) {
           setTimeline((prev) => {
             const now = new Date().toLocaleTimeString();
-            return [...prev, { time: now, hosts_scanned: Math.floor(Math.random() * 100), findings: Math.floor(Math.random() * 10) }].slice(-30);
+            const hostBatchCount = msg.rows ? msg.rows.length : (msg.stats?.processed_rows || 1);
+            const findingsCount = msg.rows ? msg.rows.filter((r) => r.port || r[1]).length : 0;
+            return [...prev, { time: now, hosts_scanned: hostBatchCount, findings: findingsCount }].slice(-30);
           });
         }
       } catch { /* ignore parse errors */ }
@@ -213,6 +229,11 @@ export default function ScanOrchestration() {
     setLoading(true);
     try {
       const token = localStorage.getItem('aegis_token');
+      const cleanTarget = sanitizeTarget(scanConfig.target);
+      const cleanType = (scanConfig.scan_type || 'l4_port').replace(/[^a-zA-Z0-9_]/g, '');
+      const cleanPorts = sanitizePortRange(scanConfig.options?.port_range || '1-1024');
+      const cleanTimeout = Math.min(Math.max(parseInt(scanConfig.options?.timeout) || 5, 1), 60);
+
       const res = await fetch(`${API_BASE}/query`, {
         method: 'POST',
         headers: {
@@ -220,7 +241,7 @@ export default function ScanOrchestration() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          query: `INSERT INTO aegis.scans (target, scan_type, port_range, timeout, status) VALUES ('${scanConfig.target}', '${scanConfig.scan_type}', '${scanConfig.options.port_range}', ${scanConfig.options.timeout}, 'running')`,
+          query: `INSERT INTO aegis.scans (target, scan_type, port_range, timeout, status) VALUES ('${cleanTarget}', '${cleanType}', '${cleanPorts}', ${cleanTimeout}, 'running')`,
         }),
       });
 
@@ -228,8 +249,8 @@ export default function ScanOrchestration() {
         const data = await res.json();
         const newScan = {
           id: data.query_id || `scan-${Date.now()}`,
-          target: scanConfig.target,
-          scan_type: scanConfig.scan_type,
+          target: cleanTarget,
+          scan_type: cleanType,
           status: 'running',
           completed: 0,
           total: 0,
@@ -249,13 +270,32 @@ export default function ScanOrchestration() {
     }
   };
 
-  const handleStopScan = (scanId) => {
+  const handleStopScan = async (scanId) => {
     setScans((prev) =>
       prev.map((s) => s.id === scanId ? { ...s, status: 'stopped' } : s)
     );
     if (activeScan?.id === scanId) {
       setActiveScan((prev) => prev ? { ...prev, status: 'stopped' } : null);
-      if (wsRef.current) wsRef.current.close();
+    }
+
+    // Send backend cancellation over active WebSocket and HTTP
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ action: 'cancel', scan_id: scanId }));
+      wsRef.current.close();
+    }
+
+    try {
+      const token = localStorage.getItem('aegis_token');
+      await fetch(`${API_BASE}/admin/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'cancel_scan', scan_id: scanId }),
+      });
+    } catch {
+      console.warn('Backend scan cancellation notification completed');
     }
   };
 
