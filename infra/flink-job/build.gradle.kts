@@ -1,6 +1,6 @@
 plugins {
     java
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("com.gradleup.shadow") version "8.3.6"
     id("com.google.protobuf") version "0.9.4"
 }
 
@@ -21,18 +21,6 @@ protobuf {
     protoc {
         artifact = "com.google.protobuf:protoc:3.25.2"
     }
-    plugins {
-        id("javalite") {
-            artifact = "com.google.protobuf:protoc-gen-javalite:3.25.2"
-        }
-    }
-    generateProtoTasks {
-        all().forEach {
-            it.plugins {
-                id("javalite")
-            }
-        }
-    }
 }
 
 dependencies {
@@ -46,6 +34,7 @@ dependencies {
     implementation("org.apache.flink:flink-json:1.20.0")
 
     // Kafka connector
+    implementation("org.apache.flink:flink-connector-base:1.20.0")
     implementation("org.apache.flink:flink-connector-kafka:3.3.0-1.20")
 
     // Iceberg
@@ -69,7 +58,7 @@ dependencies {
 sourceSets {
     main {
         java {
-            srcDirs += "build/generated/source/proto/main/javalite"
+            srcDir("build/generated/source/proto/main/java")
         }
     }
 }
@@ -93,6 +82,7 @@ tasks.register<Jar>("deduplicationJar") {
 }
 
 tasks.shadowJar {
+    isZip64 = true
     archiveClassifier.set("")
     manifest {
         attributes(

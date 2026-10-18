@@ -32,7 +32,6 @@ function SpaceTree({ apiUrl = '/space-tree', rootPrefix = '2001:db8::/32', maxDe
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
     setError(null);
 
     fetch(fullUrl)

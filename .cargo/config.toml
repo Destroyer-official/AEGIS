@@ -13,7 +13,6 @@ PROTOC = "C:\\Users\\shant\\protoc\\bin\\protoc.exe"
 
 [target."cfg(windows)"]
 # Windows-specific settings
-rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 # Profile overrides for faster builds during development
 [profile.dev]

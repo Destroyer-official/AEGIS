@@ -6,9 +6,10 @@
 from __future__ import annotations
 
 import os
+
 import torch
 
-from dqn_model import DuelingDQN, STATE_DIM, ACTION_DIM
+from dqn_model import ACTION_DIM, STATE_DIM, DuelingDQN
 
 
 def export_onnx(

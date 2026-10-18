@@ -16,8 +16,6 @@ import os
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
-
 
 # ─────────────────────────────────────────────────────────
 # Feature Statistics (baseline from training data)
@@ -53,7 +51,7 @@ BASELINE_STD = {
 # KL-Divergence Computation
 # ─────────────────────────────────────────────────────────
 
-def _histogram(values: List[float], bins: int = 30, range_min: float = -3.0, range_max: float = 3.0) -> List[float]:
+def _histogram(values: list[float], bins: int = 30, range_min: float = -3.0, range_max: float = 3.0) -> list[float]:
     """Compute normalized histogram (probability distribution) from values."""
     bin_width = (range_max - range_min) / bins
     counts = [0.0] * bins
@@ -69,7 +67,7 @@ def _histogram(values: List[float], bins: int = 30, range_min: float = -3.0, ran
     return counts
 
 
-def kl_divergence(p: List[float], q: List[float], epsilon: float = 1e-10) -> float:
+def kl_divergence(p: list[float], q: list[float], epsilon: float = 1e-10) -> float:
     """Compute KL(P || Q) between two probability distributions."""
     assert len(p) == len(q), "Distributions must have same length"
     kl = 0.0
@@ -80,7 +78,7 @@ def kl_divergence(p: List[float], q: List[float], epsilon: float = 1e-10) -> flo
     return kl
 
 
-def jensen_shannon_divergence(p: List[float], q: List[float]) -> float:
+def jensen_shannon_divergence(p: list[float], q: list[float]) -> float:
     """Compute Jensen-Shannon divergence (symmetric KL variant)."""
     m = [(pi + qi) / 2.0 for pi, qi in zip(p, q)]
     return (kl_divergence(p, m) + kl_divergence(q, m)) / 2.0
@@ -145,17 +143,17 @@ class DriftMonitor:
         window_size: int = 1000,
         kl_threshold: float = 0.1,
         check_interval: int = 100,
-        alert_log_path: Optional[str] = None,
+        alert_log_path: str | None = None,
     ):
         self.window_size = window_size
         self.kl_threshold = kl_threshold
         self.check_interval = check_interval
         self.alert_log_path = alert_log_path
 
-        self.feature_buffers: Dict[str, deque] = {}
+        self.feature_buffers: dict[str, deque] = {}
         self.total_ingested = 0
         self.last_check = 0
-        self.alerts: List[DriftAlert] = []
+        self.alerts: list[DriftAlert] = []
 
         for key in BASELINE_MEANS:
             self.feature_buffers[key] = deque(maxlen=window_size)
@@ -171,7 +169,7 @@ class DriftMonitor:
                 self.feature_buffers[key].append(float(val))
         self.total_ingested += 1
 
-    def _normalize(self, feature: str, values: List[float]) -> List[float]:
+    def _normalize(self, feature: str, values: list[float]) -> list[float]:
         """Z-score normalize values against baseline."""
         mean = BASELINE_MEANS[feature]
         std = BASELINE_STD[feature]
@@ -179,7 +177,7 @@ class DriftMonitor:
             return [0.0] * len(values)
         return [(v - mean) / std for v in values]
 
-    def check_drift(self) -> List[DriftAlert]:
+    def check_drift(self) -> list[DriftAlert]:
         """Check all features for drift; return alerts if KL > threshold."""
         new_alerts = []
         for feature, buffer in self.feature_buffers.items():
@@ -250,7 +248,7 @@ class DriftMonitor:
 # Log Parser for Triton Inference Logs
 # ─────────────────────────────────────────────────────────
 
-def parse_triton_log(log_path: str) -> List[dict]:
+def parse_triton_log(log_path: str) -> list[dict]:
     """Parse Triton inference log file into feature dictionaries.
 
     Expected format (JSONL):
@@ -284,7 +282,7 @@ if __name__ == "__main__":
     window = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
     threshold = float(sys.argv[3]) if len(sys.argv) > 3 else 0.1
 
-    print(f"Drift Monitor")
+    print("Drift Monitor")
     print(f"  Log path:   {log_path}")
     print(f"  Window:     {window}")
     print(f"  KL thresh:  {threshold}")

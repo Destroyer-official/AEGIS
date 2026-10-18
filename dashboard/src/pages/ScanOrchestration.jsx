@@ -152,6 +152,7 @@ export default function ScanOrchestration() {
   const [loading, setLoading] = useState(false);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
+  const connectWsRef = useRef(null);
 
   const connectWebSocket = useCallback((scanId) => {
     const token = localStorage.getItem('aegis_token');
@@ -194,10 +195,12 @@ export default function ScanOrchestration() {
 
     ws.onclose = () => {
       if (activeScan?.status === 'running') {
-        reconnectTimer.current = setTimeout(() => connectWebSocket(scanId), 3000);
+        reconnectTimer.current = setTimeout(() => connectWsRef.current?.(scanId), 3000);
       }
     };
   }, [activeScan]);
+
+  connectWsRef.current = connectWebSocket;
 
   useEffect(() => {
     return () => {

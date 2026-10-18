@@ -7,13 +7,12 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Optional
 
 import numpy as np
 
 try:
-    import tritonclient.http as httpclient
     import tritonclient.grpc as grpcclient
+    import tritonclient.http as httpclient
     from tritonclient.utils import InferenceServerException
     HAS_TRITON_CLIENT = True
 except ImportError:
@@ -22,7 +21,7 @@ except ImportError:
     grpcclient = None
     InferenceServerException = None
 
-from dqn_model import STATE_DIM, ACTION_DIM, encode_state
+from dqn_model import STATE_DIM, encode_state
 
 
 class TritonDQNClient:

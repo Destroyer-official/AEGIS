@@ -16,17 +16,12 @@ Zero external dependencies: local training only, uses dqn_model.py.
 from __future__ import annotations
 
 import json
-import math
 import os
 import random
-import time
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import List, Optional, Tuple
+from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
 
 try:
     from .dqn_model import (
@@ -86,7 +81,7 @@ class RetrainResult:
     epochs_trained: int
     samples_used: int
     checkpoint_path: str
-    onnx_path: Optional[str]
+    onnx_path: str | None
     timestamp: str
     details: str
 
@@ -98,7 +93,7 @@ class RetrainResult:
 def load_training_data(
     data_dir: str = "/tmp/aegis/training_data",
     max_samples: int = 10000,
-) -> List[TrainingSample]:
+) -> list[TrainingSample]:
     """Load recent training samples from data directory."""
     samples = []
     if not os.path.exists(data_dir):
@@ -127,7 +122,7 @@ def load_training_data(
 def generate_synthetic_data(
     num_samples: int = 5000,
     seed: int = 42,
-) -> List[TrainingSample]:
+) -> list[TrainingSample]:
     """Generate synthetic training data for bootstrap / testing."""
     rng = random.Random(seed)
     samples = []
@@ -203,7 +198,7 @@ class AutoRetrainer:
         self.tau = tau
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-    def load_current_model(self) -> Tuple[DuelingDQN, float]:
+    def load_current_model(self) -> tuple[DuelingDQN, float]:
         """Load current production model and its reward."""
         model = DuelingDQN(state_dim=STATE_DIM, action_dim=ACTION_DIM)
         ckpt_path = os.path.join(self.checkpoint_dir, "dqn_global_final.pt")
@@ -219,8 +214,8 @@ class AutoRetrainer:
     def train_model(
         self,
         model: DuelingDQN,
-        samples: List[TrainingSample],
-    ) -> Tuple[DuelingDQN, float, int]:
+        samples: list[TrainingSample],
+    ) -> tuple[DuelingDQN, float, int]:
         """Train DQN on samples, return trained model, avg reward, epochs."""
         agent = DQNAgent(state_dim=STATE_DIM, action_dim=ACTION_DIM)
         agent.policy_net.load_state_dict(model.state_dict())
@@ -255,7 +250,7 @@ class AutoRetrainer:
         trained_model.load_state_dict(agent.policy_net.state_dict())
         return trained_model, avg_reward, self.max_epochs
 
-    def evaluate_model(self, model: DuelingDQN, samples: List[TrainingSample]) -> float:
+    def evaluate_model(self, model: DuelingDQN, samples: list[TrainingSample]) -> float:
         """Evaluate model on held-out samples, return avg Q-value."""
         model.eval()
         total_q = 0.0
@@ -280,7 +275,7 @@ class AutoRetrainer:
         torch.save({
             "policy": model.state_dict(),
             "avg_reward": reward,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "state_dim": STATE_DIM,
             "action_dim": ACTION_DIM,
         }, path)
@@ -312,7 +307,7 @@ class AutoRetrainer:
 
     def run(self) -> RetrainResult:
         """Execute the full retrain pipeline."""
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
 
         # Load current model
         current_model, old_reward = self.load_current_model()
@@ -404,7 +399,6 @@ class AutoRetrainer:
 # ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    import sys
 
     print("=" * 60)
     print("AEGIS Auto-Retraining Pipeline")

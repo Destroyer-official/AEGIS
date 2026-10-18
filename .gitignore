@@ -79,6 +79,8 @@ kubeconfig
 # Logs
 *.log
 logs/
+audit-logs/
+**/audit-logs/
 
 # OS
 Thumbs.db

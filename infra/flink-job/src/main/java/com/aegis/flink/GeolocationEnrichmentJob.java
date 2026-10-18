@@ -10,6 +10,7 @@ import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.CheckpointingMode;
+import org.apache.flink.streaming.api.datastream.AsyncDataStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
@@ -31,6 +32,7 @@ import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * AEGIS Tier 1 Geolocation Enrichment Flink Job
@@ -105,15 +107,16 @@ public class GeolocationEnrichmentJob {
             .name("Filter Open Hosts");
 
         // Async enrichment with Tier 1 geolocation
-        DataStream<EnrichedHost> enriched = openHosts
-            .asyncIO(
-                new Tier1GeolocationEnricher(),
-                ASYNC_TIMEOUT_MS,
-                ASYNC_CAPACITY
-            )
-            .name("Tier 1 Geolocation Enrichment")
-            .uid("tier1-geo-enrichment")
-            .setParallelism(ASYNC_PARALLELISM);
+        DataStream<EnrichedHost> enriched = AsyncDataStream.unorderedWait(
+            openHosts,
+            new Tier1GeolocationEnricher(),
+            ASYNC_TIMEOUT_MS,
+            TimeUnit.MILLISECONDS,
+            ASYNC_CAPACITY
+        )
+        .name("Tier 1 Geolocation Enrichment")
+        .uid("tier1-geo-enrichment")
+        .setParallelism(ASYNC_PARALLELISM);
 
         // Filter only successfully enriched (Tier 1 confidence > 0.95)
         DataStream<EnrichedHost> tier1Enriched = enriched
@@ -128,7 +131,7 @@ public class GeolocationEnrichmentJob {
                 .setTopic(OUTPUT_TOPIC)
                 .setValueSerializationSchema(new EnrichedHostSerializationSchema())
                 .build())
-            .setDeliveryGuarantee(org.apache.flink.connector.kafka.sink.DeliveryGuarantee.EXACTLY_ONCE)
+            .setDeliveryGuarantee(org.apache.flink.connector.base.DeliveryGuarantee.EXACTLY_ONCE)
             .setTransactionalIdPrefix("aegis-geo-enrichment")
             .build();
 
@@ -137,6 +140,14 @@ public class GeolocationEnrichmentJob {
             .uid("enrichment-events-sink");
 
         env.execute("AEGIS Tier 1 Geolocation Enrichment Job");
+    }
+
+    private static long parseTimestamp(String isoString) {
+        try {
+            return Instant.parse(isoString).toEpochMilli();
+        } catch (Exception e) {
+            return System.currentTimeMillis();
+        }
     }
 
     /**
@@ -159,7 +170,7 @@ public class GeolocationEnrichmentJob {
         @Override
         public void asyncInvoke(L4Response input, ResultFuture<EnrichedHost> resultFuture) {
             CompletableFuture.supplyAsync(() -> enrich(input), executor)
-                .thenAccept(resultFuture::complete)
+                .thenAccept(host -> resultFuture.complete(Collections.singleton(host)))
                 .exceptionally(ex -> {
                     LOG.warn("Tier 1 enrichment failed for IP: {}", ex.getMessage());
                     // Emit unenriched host as fallback (Tier 2 will handle)
@@ -385,10 +396,10 @@ public class GeolocationEnrichmentJob {
      * Serialization schema for EnrichedHost to Kafka
      */
     public static class EnrichedHostSerializationSchema
-            implements KafkaRecordSerializationSchema<EnrichedHost> {
+            implements org.apache.flink.api.common.serialization.SerializationSchema<EnrichedHost> {
 
         @Override
-        public byte[] serialize(EnrichedHost element, KafkaSinkContext context, Long timestamp) {
+        public byte[] serialize(EnrichedHost element) {
             return element.toByteArray();
         }
     }

@@ -12,6 +12,7 @@ export default function StreamingMetrics({ sql = null }) {
   const [error, setError] = useState(null);
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
+  const connectRef = useRef(null);
 
   const connect = useCallback(() => {
     const token = localStorage.getItem('aegis_token');
@@ -58,7 +59,7 @@ export default function StreamingMetrics({ sql = null }) {
 
     ws.onclose = () => {
       setConnected(false);
-      reconnectTimer.current = setTimeout(connect, 3000);
+      reconnectTimer.current = setTimeout(() => connectRef.current?.(), 3000);
     };
 
     ws.onerror = () => {
@@ -66,6 +67,8 @@ export default function StreamingMetrics({ sql = null }) {
       ws.close();
     };
   }, [sql]);
+
+  connectRef.current = connect;
 
   useEffect(() => {
     connect();

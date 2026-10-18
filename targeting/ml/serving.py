@@ -8,10 +8,8 @@ Target latency: <100ms per prediction request.
 
 from __future__ import annotations
 
-import asyncio
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
 
 import torch
 from fastapi import FastAPI, HTTPException
@@ -22,7 +20,6 @@ try:
         ACTION_DIM,
         STATE_DIM,
         DQNAgent,
-        DuelingDQN,
         encode_state,
     )
 except ImportError:
@@ -30,7 +27,6 @@ except ImportError:
         ACTION_DIM,
         STATE_DIM,
         DQNAgent,
-        DuelingDQN,
         encode_state,
     )
 
@@ -66,7 +62,7 @@ class SpaceTreeNodeResponse(BaseModel):
     expected_reward: float = Field(..., description="Expected reward prior")
     saturated: bool = Field(..., description="Whether region is saturated")
     depth: int = Field(..., ge=0, description="Tree depth (0=root)")
-    children: list["SpaceTreeNodeResponse"] = Field(default_factory=list, description="Child nodes")
+    children: list[SpaceTreeNodeResponse] = Field(default_factory=list, description="Child nodes")
 
 
 class SpaceTreeRequest(BaseModel):
@@ -107,7 +103,7 @@ class TrainRequest(BaseModel):
 
 
 class TrainResponse(BaseModel):
-    loss: Optional[float] = None
+    loss: float | None = None
     buffer_size: int
     steps: int
 
@@ -124,10 +120,10 @@ class HealthResponse(BaseModel):
 # ─────────────────────────────────────────────────────────
 
 class AppState:
-    agent: Optional[DQNAgent] = None
+    agent: DQNAgent | None = None
     device: str = "cpu"
     start_time: float = 0.0
-    model_path: Optional[str] = None
+    model_path: str | None = None
 
 
 state = AppState()
@@ -160,7 +156,6 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    pass
 
 
 app = FastAPI(
@@ -293,8 +288,9 @@ async def model_info():
 # ─────────────────────────────────────────────────────────
 
 def main():
-    import uvicorn
     import os
+
+    import uvicorn
 
     host = os.environ.get("AEGIS_SERVE_HOST", "0.0.0.0")
     port = int(os.environ.get("AEGIS_SERVE_PORT", "8000"))
@@ -308,7 +304,7 @@ def main():
 # ─────────────────────────────────────────────────────────
 
 import ipaddress
-from typing import Optional
+
 
 class _SpaceTreeNode:
     """Internal space tree node for building visualization."""
@@ -325,8 +321,7 @@ class _SpaceTreeNode:
         if self.prefix.prefixlen >= 124:
             return
         new_len = self.prefix.prefixlen + 1
-        if new_len > 124:
-            new_len = 124
+        new_len = min(new_len, 124)
         subnets = list(self.prefix.subnets(new_prefix=new_len))
         for subnet in subnets[:k]:
             self.children.append(_SpaceTreeNode(subnet, 0))

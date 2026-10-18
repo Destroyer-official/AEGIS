@@ -322,7 +322,7 @@ HAVING cardinality(array_agg(DISTINCT s.host_ip)) > 1;
 ### Run All Tests
 ```bash
 # Rust (all workspaces)
-cargo test --workspace
+for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do (cd "$d" && cargo test --workspace); done
 
 # Dashboard
 cd dashboard && npm test
@@ -398,14 +398,16 @@ AEGIS/
 ```bash
 # 1. Fork & clone
 # 2. Create feature branch: git checkout -b feat/amazing-feature
-# 4. Run full CI locally
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+# 3. Make changes and run full CI locally
+for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do
+  (cd "$d" && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace)
+done
 cargo fmt --check
-npm run lint   # dashboard
-ruff check .   # targeting/ml
+(cd dashboard && npm run lint && npm test)
+(cd targeting/ml && ruff check . && pytest -v)
+(cd infra/flink-job && ./gradlew test)
 
-# 5. Submit PR with clear description
+# 4. Submit PR with clear description
 ```
 
 ---
@@ -435,7 +437,7 @@ Built on foundational research:
 - **Issues**: [GitHub Issues](https://github.com/Destroyer-official/AEGIS/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Destroyer-official/AEGIS/discussions)
 - **Security**: security@aegis.example.com (PGP key in repo)
-- **Docs**: [Full Documentation](https://github.com/Destroyer-official/AEGIS/tree/main/docs)
+- **Docs**: [Full Documentation](docs/)
 
 ---
 

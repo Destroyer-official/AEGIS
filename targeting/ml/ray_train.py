@@ -13,18 +13,17 @@ Architecture:
 from __future__ import annotations
 
 import os
-import time
 import threading
-from dataclasses import dataclass, field
-from typing import Optional
+import time
+from dataclasses import dataclass
 
-import torch
 import ray
+import torch
 
 try:
-    from .dqn_model import DQNAgent, DuelingDQN, STATE_DIM, ACTION_DIM
+    from .dqn_model import ACTION_DIM, STATE_DIM, DQNAgent, DuelingDQN
 except ImportError:
-    from dqn_model import DQNAgent, DuelingDQN, STATE_DIM, ACTION_DIM
+    from dqn_model import ACTION_DIM, STATE_DIM, DQNAgent, DuelingDQN
 
 
 # ─────────────────────────────────────────────────────────
@@ -221,10 +220,10 @@ def run_distributed_training(config: DistributedTrainingConfig | None = None):
 
     ray.init(ignore_reinit_error=True, include_dashboard=False)
 
-    print(f"[Ray] Starting distributed training:")
+    print("[Ray] Starting distributed training:")
     print(f"  Trainers: {config.num_trainers}")
     print(f"  Parameter Servers: {config.num_parameter_servers}")
-    print(f"  Dashboard: http://127.0.0.1:8265")
+    print("  Dashboard: http://127.0.0.1:8265")
     print(f"  Target duration: {config.run_duration_sec}s ({config.run_duration_sec/60:.0f} min)")
 
     # Create parameter server
@@ -288,7 +287,7 @@ def run_distributed_training(config: DistributedTrainingConfig | None = None):
             # Logging
             if step % 10 == 0:
                 avg_losses = [sum(l)/len(l) if l else 0 for l in all_losses]
-                print(f"[Step {step} | {elapsed:.0f}s] losses={['%.4f'%x for x in avg_losses]}")
+                print(f"[Step {step} | {elapsed:.0f}s] losses={[f'{x:.4f}' for x in avg_losses]}")
 
                 # Get trainer metrics
                 metrics_futures = [t.get_metrics.remote() for t in trainers]

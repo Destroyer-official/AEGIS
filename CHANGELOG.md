@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2026-10-18
+
+### Fixed
+- **Flink Job (Java)**: Configured Protobuf `java_multiple_files = true`, upgraded to Gradle 9.7.1 wrapper and `com.gradleup.shadow` 8.3.6 with `isZip64 = true`, resolved `DeliveryGuarantee` and async Flink DataStream bindings.
+- **Dashboard (TypeScript/React 19)**: Relocated `SpaceTree` component into `src/components/`, removed unused imports, fixed WebSocket reconnect recursive references, added `npm test` script, achieved 0 lint errors/warnings.
+- **ML Workspace (Python)**: Added comprehensive `pytest` test suite in `targeting/ml/tests/` covering DQN agent, drift detection, and ONNX export; fixed Ruff linting issues and added timezone-aware datetime usage.
+- **Cargo Configuration**: Removed invalid `-fuse-ld=lld` flag for Windows MSVC builds to eliminate linker warnings.
+- **Repository Hygiene**: Removed stray tracked file `1000000`, cleaned cache directories, and updated `.gitignore` for `audit-logs/`.
+
+---
+
 ## [1.0.0] - 2026-08-30
 
 ### Added
