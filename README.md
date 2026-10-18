@@ -167,70 +167,177 @@ ML_DEVICE=cuda
 
 ---
 
-## 🚀 Quick Start
+---
 
-### Prerequisites
-| Tool | Minimum Version | Install Command |
-|------|----------------|-----------------|
-| Rust | 1.98+ | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| Node.js | 26+ | `fnm install 26` or `nvm install 26` |
-| Python | 3.14+ | `python3 -m venv .venv && source .venv/bin/activate` |
-| Docker | 24+ | `curl -fsSL https://get.docker.com \| sh` |
-| Kind | 0.23+ | `go install sigs.k8s.io/kind@latest` |
-| protoc | 36+ | `scoop install protobuf` / `apt install protobuf-compiler` |
+## ⚡ Quick Start: How Normal Users & Analysts Use AEGIS
 
-### 1️⃣ Local Development Cluster (5 minutes)
+You don't need a massive Kubernetes cluster to start using AEGIS right now. Below are direct, hands-on examples for running individual probes, starting the API gateway, and visualizing data.
+
+### 🌐 Mode 1: Live Internet TLS Probing (No Cluster Required)
+
+Directly interrogate public internet endpoints using AEGIS zero-copy TLS parser and JA4S engine over live TCP:
+
 ```bash
-# Clone and enter
-git clone https://github.com/Destroyer-official/AEGIS.git
-cd AEGIS
+# Probe Cloudflare DNS over real WAN (computes live JA4S fingerprint)
+cd packet-engine/interrogation/tls
+cargo run --example live_tls_probe -- 1.1.1.1:443
 
-# Spin up local cluster (Kafka, Flink, MinIO, Trino, Nessie)
-cd infra
-./scripts/bootstrap.sh
-
-# Verify all services
-./scripts/verify.sh
+# Probe GitHub or any domain/IP
+cargo run --example live_tls_probe -- github.com:443
+cargo run --example live_tls_probe -- 8.8.8.8:443
 ```
 
-**Expected output:**
-```
-✓ Kafka broker ready at localhost:9092
-✓ Flink UI at http://localhost:8081
-✓ Trino at http://localhost:8080
-✓ MinIO API at http://localhost:9000
-✓ Nessie catalog at http://localhost:19120
-✓ Iceberg tables: hosts, services, certificates
+**Real Live Output Example:**
+```text
+========================================================
+  AEGIS Live TLS / JA4S Internet Probe
+  Target:   1.1.1.1:443
+  SNI Host: one.one.one.one
+========================================================
+[1/4] Connecting to 1.1.1.1:443 via TCP...
+      Connected successfully!
+[2/4] Sending RFC 8446 ClientHello probe (209 bytes)...
+[3/4] Awaiting live TLS response from remote server...
+      Received 2615 bytes from remote server!
+[4/4] Parsing TLS records and calculating JA4S fingerprint...
+  ├── Content-Type: Handshake
+  ├── Wire Legacy Version: Tls12
+  └── Record Payload Size: 122 bytes
+
+  [ServerHello Details]
+    • Wire Legacy Version: 0x0303
+    • Negotiated TLS Version: 0x0304 (TLS 1.3)
+    • Selected Cipher Suite: 0x1301
+    • Extension Count: 2
+    • Extension IDs: [51, 43]
+
+  ========================================================
+  🎯 LIVE JA4S FINGERPRINT: s13_1301_a56c5b993250
+     Version: 13 | Cipher: 1301 | ExtHash: a56c5b993250
+  ========================================================
 ```
 
-### 2️⃣ Generate Test Data
+---
+
+### 🚀 Mode 2: Start the AEGIS Gateway & Interactive API Docs
+
+Launch the Axum REST/WebSocket/gRPC Gateway locally:
+
 ```bash
-cd infra/synthetic-generator
-cargo run --release -- \
-  --kafka-broker localhost:9092 \
-  --topics raw-l4-scans,tls-fingerprints,l7-banners \
-  --rate 1000 \
-  --duration 60
+cd gateway
+cargo run
 ```
+The gateway starts on port `3000` (HTTP/WS) and `50051` (gRPC).
 
-### 3️⃣ Query Data
-```bash
-# Trino CLI
-trino --server localhost:8080 --catalog aegis --schema aegis
+1. **Verify Health:**
+   ```bash
+   curl http://localhost:3000/health
+   # Returns: {"status":"ok","version":"0.1.0","active_queries":0,"uptime_secs":4}
+   ```
+2. **Interactive Swagger UI:**
+   Open your browser to:
+   ```
+   http://localhost:3000/swagger-ui
+   ```
+   Explore and test all authentication, query, scanning, and user administration endpoints interactively.
+3. **Download OpenAPI 3.0 Specification:**
+   ```bash
+   curl http://localhost:3000/api-docs/openapi.json
+   ```
 
-# Time-travel query
-SELECT * FROM hosts 
-FOR SYSTEM_TIME AS OF TIMESTAMP '2026-08-30 12:00:00' 
-LIMIT 10;
-```
+---
 
-### 4️⃣ Launch Dashboard
+### 🖥️ Mode 3: Interactive Web Dashboard
+
+Launch the modern React + Vite dashboard:
+
 ```bash
 cd dashboard
 npm install
 npm run dev
-# Open http://localhost:5173
 ```
+Open **`http://localhost:5173`** in your browser to view real-time host exploration, JA4 fingerprinting analytics, and vulnerability breakdowns.
+
+---
+
+### 🧠 Mode 4: Python ML Targeting & IPv6 Evaluation
+
+Test the reinforcement learning target predictor and hit rate evaluation pipeline:
+
+```bash
+cd targeting/ml
+python -m venv .venv
+
+# On Linux/macOS:
+source .venv/bin/activate
+# On Windows PowerShell:
+# .venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+pytest tests/test_ml_pipeline.py -v
+```
+
+---
+
+### 🏗️ Mode 5: Full Enterprise Streaming Cluster (Optional)
+
+For large-scale internet operations across Kafka, Flink, Iceberg, and Trino:
+
+```bash
+cd infra
+./scripts/bootstrap.sh
+./scripts/verify.sh
+```
+
+---
+
+## 💾 Disk Space Management & Moving to Another PC
+
+### Why does the local folder take 40–50 GB?
+AEGIS is built with Rust and Gradle. The large size is **not source code** (the repository source code is ~20 MB). When you build or test, the Rust compiler creates `target/` directories containing:
+- Precompiled dependencies for ~25 crates across 6 workspaces.
+- Debug symbols and incremental compilation caches.
+- Native build artifacts and Gradle temporary caches.
+
+### How to reclaim ~46 GB of disk space in seconds:
+You do **not** need to delete your repository to recover disk space! Simply clean the build caches:
+```bash
+# In Bash:
+for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do
+  (cd "$d" && cargo clean)
+done
+(cd infra/flink-job && ./gradlew clean)
+
+# In Windows PowerShell:
+Set-Location packet-engine; cargo clean; Set-Location ../enrichment; cargo clean; Set-Location ../gateway; cargo clean; Set-Location ../targeting/ipv6; cargo clean; Set-Location ../targeting/vistascan; cargo clean; Set-Location ../infra/synthetic-generator; cargo clean; Set-Location ../infra/flink-job; ./gradlew clean; Set-Location ../..
+```
+This instantly frees ~46 GB and shrinks the local folder back to pure source files.
+
+### Can I delete the folder and continue on another PC?
+**Yes, 100%!** Everything required to build, test, and deploy AEGIS is committed to the GitHub repository:
+- All Rust, Java, Python, and TypeScript source files.
+- The standard `gradle-wrapper.jar` for instant Gradle bootstrapping on any OS.
+- Helm charts, Dockerfiles, and CI workflow configurations.
+
+#### Steps to continue on another PC:
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Destroyer-official/AEGIS.git
+   cd AEGIS
+   ```
+2. **Install system prerequisites on the new machine:**
+   - **Rust**: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+   - **Protobuf Compiler (`protoc`)**:
+     - *Linux*: `sudo apt install protobuf-compiler`
+     - *macOS*: `brew install protobuf`
+     - *Windows*: `scoop install protobuf` or download from GitHub and add to `PATH`
+   - **Node.js**: v20+ or v26 (with npm)
+   - **Python**: 3.10+ (with venv)
+   - **Java**: OpenJDK 21 (for Flink streaming jobs)
+3. **Verify everything builds cleanly:**
+   ```bash
+   cd packet-engine && cargo test --workspace
+   ```
 
 ---
 

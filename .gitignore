@@ -8,8 +8,8 @@ Cargo.lock
 **/build/
 **/out/
 **/.gradle/
-**/gradle/wrapper/gradle-wrapper.jar
 *.jar
+!**/gradle/wrapper/gradle-wrapper.jar
 *.war
 *.ear
 *.class

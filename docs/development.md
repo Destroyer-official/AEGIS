@@ -218,31 +218,62 @@ cargo kani --harness siphash_collision_bound
 cargo kani --harness permutation_bijection
 ```
 
-### 5.4 Dashboard Tests
+### 5.4 Live Internet Probing (Real WAN Validation)
+
+Verify live TCP handshake, zero-copy TLS parsing, and JA4S calculation against live public endpoints without spinning up infrastructure:
+
+```bash
+cd packet-engine/interrogation/tls
+
+# Test against Cloudflare (1.1.1.1)
+cargo run --example live_tls_probe -- 1.1.1.1:443
+
+# Test against GitHub
+cargo run --example live_tls_probe -- github.com:443
+
+# Test against Google DNS (8.8.8.8)
+cargo run --example live_tls_probe -- 8.8.8.8:443
+```
+
+### 5.5 Dashboard Tests
 
 ```bash
 cd dashboard
-npm test              # Vitest (if configured)
+npm test              # Vitest / Vite build verification
 npm run build         # Type checking via Vite
 ```
 
-### 5.5 Python ML Tests
+### 5.6 Python ML Tests
 
 ```bash
 cd targeting/ml
 source .venv/bin/activate
 pytest -v
-pytest --cov=targeting/ml --cov-report=html
+pytest tests/test_ml_pipeline.py -v
 ```
 
-### 5.6 Java Flink Tests
+### 5.7 Java Flink Tests
 
 ```bash
 cd infra/flink-job
 ./gradlew test
 ```
 
-### 5.6 Run All Tests (CI Simulation)
+### 5.8 Disk Space Management (Clean Build Caches)
+
+Rust and Gradle store compilation artifacts locally that can grow to ~46 GB. To reclaim this disk space without affecting git:
+
+```bash
+# Clean Rust workspaces
+for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do
+  (cd "$d" && cargo clean)
+done
+
+# Clean Gradle build caches
+(cd infra/flink-job && ./gradlew clean)
+```
+
+### 5.9 Run All Tests (CI Simulation)
 
 ```bash
 #!/bin/bash
