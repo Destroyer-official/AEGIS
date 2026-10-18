@@ -289,8 +289,6 @@ cd infra
 ./scripts/verify.sh
 ```
 
-
-
 ---
 
 ## ⚙️ Configuration
