@@ -1,0 +1,32 @@
+image:
+  repository: minio/minio
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: NodePort
+  apiPort: 9000
+  consolePort: 9001
+  apiNodePort: 9000
+  consoleNodePort: 9001
+
+rootUser: minioadmin
+rootPassword: minioadmin
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "250m"
+
+# Note: For kind (4GB RAM), these are minimal. Scale up for production.
+# persistence:
+#   enabled: true
+#   size: 5Gi
+
+buckets:
+  - name: aegis-warehouse
+    policy: none
+    purge: false

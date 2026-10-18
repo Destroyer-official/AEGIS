@@ -1,0 +1,10 @@
+[package]
+name = "aegis-emerging"
+version = "0.1.0"
+edition = "2021"
+description = "Emerging protocol interrogators and pluggable Interrogator trait (§3.2.2, §6.5)"
+license = "MIT"
+publish = false
+
+[dependencies]
+thiserror = "2"

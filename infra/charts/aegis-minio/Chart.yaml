@@ -1,0 +1,6 @@
+apiVersion: v2
+name: aegis-minio
+description: MinIO S3-compatible object storage for AEGIS Iceberg lakehouse
+type: application
+version: 0.1.0
+appVersion: "latest"

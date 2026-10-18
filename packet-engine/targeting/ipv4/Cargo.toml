@@ -1,0 +1,31 @@
+[package]
+name = "aegis-targeting-ipv4"
+version = "0.1.0"
+edition = "2024"
+description = "GPS-derived co-occurrence probability matrix for IPv4 target prediction"
+
+[dependencies]
+thiserror = "2"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+csv = "1"
+ndarray = "0.15"
+rayon = "1.10"
+arrow = { version = "54", optional = true }
+parquet = { version = "54", optional = true }
+rdkafka = { version = "0.33", features = ["ssl", "sasl"], optional = true }
+aegis-proto = { path = "../../proto", optional = true }
+chrono = { version = "0.4", optional = true, features = ["serde"] }
+
+[features]
+default = []
+parquet-output = ["arrow", "parquet"]
+kafka = ["rdkafka", "aegis-proto", "chrono"]
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+rand = "0.8"
+
+[[bench]]
+name = "matrix_compute"
+harness = false

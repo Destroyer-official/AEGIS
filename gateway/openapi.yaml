@@ -1,0 +1,369 @@
+openapi: 3.1.0
+info:
+  title: AEGIS Gateway API
+  version: 0.1.0
+  description: AEGIS Platform REST/WebSocket/gRPC Gateway
+  contact:
+    name: AEGIS Platform
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://gateway.aegis.internal
+    description: Production
+
+tags:
+  - name: health
+    description: Health check endpoints
+  - name: auth
+    description: Authentication endpoints
+  - name: query
+    description: Trino query endpoints
+  - name: admin
+    description: Admin-only endpoints
+  - name: rate-limit
+    description: Rate limit status
+  - name: viewer
+    description: Viewer read-only endpoints
+
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns gateway health status and version
+      responses:
+        "200":
+          description: Health check OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Authenticate user
+      description: Returns JWT token for valid credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /query:
+    post:
+      operationId: executeQuery
+      tags: [query]
+      summary: Execute Trino query
+      description: Executes a SQL query against Trino and returns results. Requires analyst or admin role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrinoQuery"
+      responses:
+        "200":
+          description: Query results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /rate-limit/status:
+    get:
+      operationId: getRateLimitStatus
+      tags: [rate-limit]
+      summary: Get rate limit status
+      description: Returns current rate limit status for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Rate limit status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitStatus"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/action:
+    post:
+      operationId: adminAction
+      tags: [admin]
+      summary: Execute admin action
+      description: Performs an administrative action. Requires admin role.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Admin action performed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+        "403":
+          description: Requires admin role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users:
+    post:
+      operationId: manageUsers
+      tags: [admin]
+      summary: Manage users
+      description: User management operations. Requires manage_users permission.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User management action
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+        "403":
+          description: Requires manage_users permission
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /viewer/dashboard:
+    get:
+      operationId: viewerDashboard
+      tags: [viewer]
+      summary: Viewer dashboard
+      description: Read-only dashboard view. Requires viewer role or higher.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard content
+          content:
+            text/plain:
+              schema:
+                type: string
+        "403":
+          description: Requires viewer role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, version, timestamp]
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: 0.1.0
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required: [error, code]
+      properties:
+        error:
+          type: string
+        code:
+          type: integer
+          format: uint16
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+
+    TokenResponse:
+      type: object
+      required: [token, expires_in]
+      properties:
+        token:
+          type: string
+          description: JWT access token
+        expires_in:
+          type: integer
+          format: uint64
+          description: Token expiration in seconds
+
+    TrinoQuery:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          description: SQL query to execute
+          example: "SELECT * FROM catalog.schema.table LIMIT 10"
+        catalog:
+          type: string
+          description: Trino catalog override
+        schema:
+          type: string
+          description: Trino schema override
+
+    ColumnDef:
+      type: object
+      required: [name, data_type]
+      properties:
+        name:
+          type: string
+        data_type:
+          type: string
+
+    TrinoStatementStats:
+      type: object
+      properties:
+        state:
+          type: ["string", "null"]
+        queued:
+          type: ["boolean", "null"]
+        rows:
+          type: ["integer", "null"]
+          format: uint64
+        processed_rows:
+          type: ["integer", "null"]
+          format: uint64
+
+    QueryResult:
+      type: object
+      required: [columns, rows, total_rows, query_id]
+      properties:
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/ColumnDef"
+        rows:
+          type: array
+          items:
+            type: array
+            items:
+              type: string
+        total_rows:
+          type: integer
+          format: uint64
+        query_id:
+          type: string
+        stats:
+          oneOf:
+            - $ref: "#/components/schemas/TrinoStatementStats"
+            - type: "null"
+
+    RateLimitStatus:
+      type: object
+      required: [key, allowed, remaining]
+      properties:
+        key:
+          type: string
+          description: Rate limit key (user identifier)
+        allowed:
+          type: boolean
+          description: Whether the request is allowed
+        remaining:
+          type: integer
+          format: uint64
+          description: Remaining requests in current window
+
+    Claims:
+      type: object
+      required: [sub, role, tenant_id, exp, iat]
+      properties:
+        sub:
+          type: string
+          description: Subject (user ID)
+        role:
+          type: string
+          enum: [admin, analyst, viewer]
+        tenant_id:
+          type: string
+          description: Tenant identifier
+        exp:
+          type: integer
+          description: Expiration time (Unix timestamp)
+        iat:
+          type: integer
+          description: Issued at time (Unix timestamp)

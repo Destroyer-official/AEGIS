@@ -1,0 +1,8 @@
+# Kani configuration for AEGIS packet-engine formal verification
+# Run: cargo kani --cfg proofs/kani.toml --harness proofs/<file>.rs
+
+# Default solver timeout (seconds)
+solver_timeout = 300
+
+# Unwind bounds for loops
+default-unwind = 16

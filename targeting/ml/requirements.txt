@@ -1,0 +1,7 @@
+# AEGIS 6Hit DQN ML dependencies
+torch>=2.0
+fastapi>=0.100
+uvicorn[standard]>=0.23
+ray[default]>=2.7
+pydantic>=2.0
+numpy>=1.24

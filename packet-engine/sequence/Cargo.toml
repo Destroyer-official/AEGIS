@@ -1,0 +1,42 @@
+[package]
+name = "aegis-sequence"
+version = "0.1.0"
+edition = "2021"
+description = "Secret-keyed sequence number encoding via SipHash-2-4 for AEGIS Phase 1 stateless probing (§3.2.1)"
+license = "MIT"
+publish = false
+
+[dependencies]
+aegis-traversal = { path = "../traversal" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+oorandom = "11.1"
+aegis-traversal = { path = "../traversal" }
+proptest = { version = "1.0", features = ["bit-set"] }
+
+[[bench]]
+name = "seq_bench"
+harness = false
+
+[[bench]]
+name = "sequence_vs_traversal"
+harness = false
+
+[[bin]]
+name = "fuzz_runner"
+path = "src/bin/fuzz_runner.rs"
+test = false
+doc = false
+bench = false
+
+# [[bin]]
+# name = "bench_10m"
+# path = "src/bin/bench_10m.rs"
+#
+# [[bin]]
+# name = "siphash_fuzz_runner"
+# path = "src/bin/siphash_fuzz_runner.rs"
+# test = false
+# doc = false
+# bench = false

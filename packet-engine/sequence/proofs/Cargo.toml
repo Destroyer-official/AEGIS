@@ -1,0 +1,12 @@
+[package]
+name = "aegis-sequence-proofs"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+aegis-sequence = { path = ".." }
+aegis-traversal = { path = "../../traversal" }
+
+[package.metadata]
+cargo-kani = true

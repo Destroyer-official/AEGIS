@@ -1,0 +1,10 @@
+[package]
+name = "aegis-ipv6-targeting"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "6Hit RL IPv6 target traversal — state/action/reward, space tree, divisive clustering"
+
+[dependencies]
+thiserror = "2"

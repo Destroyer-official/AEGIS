@@ -1,0 +1,10 @@
+# AEGIS Probe — site-specific overrides
+# Place files in /etc/systemd/system/aegis-probe.service.d/
+#
+# Example: /etc/systemd/system/aegis-probe.service.d/numa.conf
+# [Service]
+# CPUAffinity=0 1 2 3
+
+# Example: /etc/systemd/system/aegis-probe.service.d/kafka.conf
+# [Service]
+# Environment=AEGIS_KAFKA_BROKERS=kafka1:9092,kafka2:9092

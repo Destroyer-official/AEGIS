@@ -1,0 +1,12 @@
+[package]
+name = "aegis-quic"
+version = "0.1.0"
+edition = "2021"
+description = "QUIC Initial packet craft, Version Negotiation parse, and transport parameters for AEGIS Phase 2 interrogation (§6.3)"
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+hex-literal = "0.4"

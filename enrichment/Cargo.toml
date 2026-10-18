@@ -1,0 +1,3 @@
+[workspace]
+members = ["geolocation", "cve", "asset", "enrichment-common"]
+resolver = "2"

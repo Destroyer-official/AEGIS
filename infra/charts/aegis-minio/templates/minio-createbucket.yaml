@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-createbucket
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: minio/mc:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for MinIO to be ready..."
+              sleep 10
+              mc alias set aegis http://{{ .Release.Name }}:9000 {{ .Values.rootUser }} {{ .Values.rootPassword }}
+              {{- range .Values.buckets }}
+              mc mb --ignore-existing aegis/{{ .name }}
+              echo "Bucket {{ .name }} ready"
+              {{- end }}
+              mc ls aegis/

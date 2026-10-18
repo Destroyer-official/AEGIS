@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-taskmanager
+  labels:
+    app: {{ .Release.Name }}
+    component: taskmanager
+spec:
+  replicas: {{ .Values.taskmanager.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+      component: taskmanager
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+        component: taskmanager
+    spec:
+      containers:
+        - name: taskmanager
+          image: "{{ .Values.taskmanager.image.repository }}:{{ .Values.taskmanager.image.tag }}"
+          imagePullPolicy: {{ .Values.taskmanager.image.pullPolicy }}
+          command: ["/docker-entrypoint.sh"]
+          args: ["taskmanager"]
+          ports:
+            - containerPort: 6122
+              name: rpc
+          env:
+            - name: FLINK_PROPERTIES
+              value: |
+                jobmanager.rpc.address: {{ .Release.Name }}-jobmanager
+                jobmanager.rpc.port: 6123
+                taskmanager.memory.process.size: 1728m
+                taskmanager.numberOfTaskSlots: {{ .Values.taskmanager.slots }}
+                state.backend: {{ .Values.stateBackend.type }}
+                state.backend.incremental: {{ .Values.stateBackend.incremental }}
+                execution.checkpointing.interval: {{ .Values.checkpoint.intervalMs }}
+                execution.checkpointing.min-pause: {{ .Values.checkpoint.minPauseMs }}
+                execution.checkpointing.timeout: {{ .Values.checkpoint.timeoutMs }}
+                execution.checkpointing.mode: {{ .Values.checkpoint.mode }}
+                state.checkpoints.dir: file:///tmp/flink-checkpoints
+                state.savepoints.dir: file:///tmp/flink-savepoints
+          resources:
+            {{- toYaml .Values.taskmanager.resources | nindent 12 }}
+          volumeMounts:
+            - name: flink-checkpoints
+              mountPath: /tmp/flink-checkpoints
+            - name: flink-savepoints
+              mountPath: /tmp/flink-savepoints
+      volumes:
+        - name: flink-checkpoints
+          emptyDir: {}
+        - name: flink-savepoints
+          emptyDir: {}

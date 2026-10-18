@@ -1,0 +1,29 @@
+image:
+  repository: projectnessie/nessie
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 19120
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "250m"
+
+# Note: For kind (4GB RAM), these are minimal. Scale up for production.
+# versionStoreType: IN_MEMORY uses more memory; use ROCKSDB for production
+
+nessie:
+  versionStoreType: IN_MEMORY
+  defaultBranch: main
+  s3:
+    endpoint: http://aegis-minio:9000
+    accessKeyId: minioadmin
+    secretAccessKey: minioadmin
+    bucket: aegis-warehouse
+    region: us-east-1

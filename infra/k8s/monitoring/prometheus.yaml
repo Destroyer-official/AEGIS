@@ -1,0 +1,558 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets: []
+
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+
+    scrape_configs:
+      # Prometheus self-monitoring
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # Kubernetes API server
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+          - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+
+      # Kubernetes nodes
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+
+      # Kubernetes pods with prometheus annotations
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+      # Kafka via JMX Exporter
+      - job_name: 'kafka'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - default
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: aegis-kafka
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_ip]
+            action: replace
+            target_label: __address__
+            regex: (.*)
+            replacement: ${1}:7071
+
+      # Flink JobManager
+      - job_name: 'flink-jobmanager'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - default
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_component]
+            action: keep
+            regex: jobmanager
+          - source_labels: [__meta_kubernetes_pod_ip]
+            action: replace
+            target_label: __address__
+            regex: (.*)
+            replacement: ${1}:9251
+
+      # Flink TaskManager
+      - job_name: 'flink-taskmanager'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - default
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_component]
+            action: keep
+            regex: taskmanager
+          - source_labels: [__meta_kubernetes_pod_ip]
+            action: replace
+            target_label: __address__
+            regex: (.*)
+            replacement: ${1}:9251
+
+      # Trino
+      - job_name: 'trino'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - default
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_component]
+            action: keep
+            regex: coordinator
+          - source_labels: [__meta_kubernetes_pod_ip]
+            action: replace
+            target_label: __address__
+            regex: (.*)
+            replacement: ${1}:8080
+
+      # MinIO
+      - job_name: 'minio'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - default
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: aegis-minio
+          - source_labels: [__meta_kubernetes_pod_ip]
+            action: replace
+            target_label: __address__
+            regex: (.*)
+            replacement: ${1}:9000
+
+      # Nessie
+      - job_name: 'nessie'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - default
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            action: keep
+            regex: aegis-polaris
+          - source_labels: [__meta_kubernetes_pod_ip]
+            action: replace
+            target_label: __address__
+            regex: (.*)
+            replacement: ${1}:19120
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: monitoring
+data:
+  kafka-alerts.yml: |
+    groups:
+      - name: kafka-alerts
+        rules:
+          - alert: KafkaBrokerDown
+            expr: up{job="kafka"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Kafka broker down"
+              description: "Kafka broker {{ $labels.instance }} has been down for more than 1 minute."
+
+          - alert: KafkaUnderReplicatedPartitions
+            expr: kafka_server_replicamanager_underreplicatedpartitions > 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Kafka under-replicated partitions"
+              description: "Kafka has {{ $value }} under-replicated partitions."
+
+          - alert: KafkaOfflinePartitions
+            expr: kafka_controller_kafkacontroller_offlinepartitionscount > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Kafka offline partitions"
+              description: "Kafka has {{ $value }} offline partitions."
+
+          - alert: KafkaConsumerLagHigh
+            expr: kafka_consumergroup_lag > 10000
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Kafka consumer lag high"
+              description: "Consumer group {{ $labels.consumergroup }} lag is {{ $value }} for topic {{ $labels.topic }}."
+
+          - alert: KafkaDiskUsageHigh
+            expr: (kafka_log_logsize / 1024 / 1024 / 1024) > 10
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Kafka partition disk usage high"
+              description: "Partition {{ $labels.partition }} of topic {{ $labels.topic }} is using {{ $value }} GB."
+
+  flink-alerts.yml: |
+    groups:
+      - name: flink-alerts
+        rules:
+          - alert: FlinkJobManagerDown
+            expr: up{job="flink-jobmanager"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Flink JobManager down"
+              description: "Flink JobManager has been down for more than 1 minute."
+
+          - alert: FlinkTaskManagerDown
+            expr: up{job="flink-taskmanager"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Flink TaskManager down"
+              description: "Flink TaskManager has been down for more than 1 minute."
+
+          - alert: FlinkJobFailed
+            expr: flink_jobmanager_job_status{status="FAILED"} == 1
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Flink job failed"
+              description: "Flink job {{ $labels.job_name }} ({{ $labels.job_id }}) has failed."
+
+          - alert: FlinkCheckpointSlow
+            expr: flink_jobmanager_job_last_checkpoint_duration > 300000
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Flink checkpoint slow"
+              description: "Flink job {{ $labels.job_name }} checkpoint taking > 5 minutes."
+
+          - alert: FlinkCheckpointFailed
+            expr: flink_jobmanager_job_number_of_failed_checkpoints > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Flink checkpoint failed"
+              description: "Flink job {{ $labels.job_name }} has failed checkpoints."
+
+          - alert: FlinkBackpressureHigh
+            expr: flink_taskmanager_job_task_backpressure_ratio > 0.5
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Flink backpressure high"
+              description: "Task {{ $labels.task_name }} backpressure ratio is {{ $value }}."
+
+  trino-alerts.yml: |
+    groups:
+      - name: trino-alerts
+        rules:
+          - alert: TrinoCoordinatorDown
+            expr: up{job="trino"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Trino coordinator down"
+              description: "Trino coordinator has been down for more than 1 minute."
+
+          - alert: TrinoQueryQueueHigh
+            expr: trino_query_manager_queued_queries > 50
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Trino query queue high"
+              description: "{{ $value }} queries queued in Trino."
+
+          - alert: TrinoMemoryUsageHigh
+            expr: (trino_memory_pool_usage / trino_memory_pool_max) > 0.9
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Trino memory usage high"
+              description: "Trino memory pool {{ $labels.pool }} usage at {{ $value | humanizePercentage }}."
+
+          - alert: TrinoFailedQueriesHigh
+            expr: rate(trino_query_manager_failed_queries_total[5m]) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Trino failed queries high"
+              description: "Trino failed query rate is {{ $value }} per second."
+
+  minio-alerts.yml: |
+    groups:
+      - name: minio-alerts
+        rules:
+          - alert: MinIODown
+            expr: up{job="minio"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "MinIO down"
+              description: "MinIO has been down for more than 1 minute."
+
+          - alert: MinIODiskUsageHigh
+            expr: (minio_disk_usage_bytes / minio_disk_capacity_bytes) > 0.85
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "MinIO disk usage high"
+              description: "MinIO disk usage at {{ $value | humanizePercentage }}."
+
+          - alert: MinIOBucketMissing
+            expr: minio_bucket_exists{bucket="aegis-warehouse"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "MinIO bucket aegis-warehouse missing"
+              description: "The aegis-warehouse bucket does not exist in MinIO."
+
+          - alert: MinIOOfflineDisks
+            expr: minio_cluster_disk_offline_count > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "MinIO offline disks"
+              description: "{{ $value }} MinIO disks are offline."
+
+  nessie-alerts.yml: |
+    groups:
+      - name: nessie-alerts
+        rules:
+          - alert: NessieDown
+            expr: up{job="nessie"} == 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Nessie down"
+              description: "Nessie catalog has been down for more than 1 minute."
+
+          - alert: NessieAPIErrorsHigh
+            expr: rate(nessie_api_requests_total{status=~"5.."}[5m]) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Nessie API errors high"
+              description: "Nessie 5xx error rate is {{ $value }} per second."
+
+  k8s-alerts.yml: |
+    groups:
+      - name: k8s-alerts
+        rules:
+          - alert: K8sNodeNotReady
+            expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Kubernetes node not ready"
+              description: "Node {{ $labels.node }} has been not ready for 5 minutes."
+
+          - alert: K8sPodNotRunning
+            expr: kube_pod_status_phase{phase=~"Failed|Pending"} > 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Kubernetes pod not running"
+              description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is in {{ $labels.phase }} state."
+
+          - alert: K8sPodOOMKilled
+            expr: increase(container_oom_events_total[1h]) > 0
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Kubernetes pod OOM killed"
+              description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} was OOM killed."
+
+          - alert: K8sHighCPUUsage
+            expr: (sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) by (instance) / count(node_cpu_seconds_total{mode="idle"}) by (instance)) > 0.9
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Kubernetes node high CPU"
+              description: "Node {{ $labels.instance }} CPU usage > 90% for 10 minutes."
+
+          - alert: K8sHighMemoryUsage
+            expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Kubernetes node high memory"
+              description: "Node {{ $labels.instance }} memory usage > 90% for 10 minutes."
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.48.0
+          args:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--storage.tsdb.retention.time=15d'
+            - '--web.enable-lifecycle'
+            - '--web.enable-admin-api'
+            - '--enable-feature=service-monitor'
+          ports:
+            - containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: rules
+              mountPath: /etc/prometheus/rules
+            - name: storage
+              mountPath: /prometheus
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: rules
+          configMap:
+            name: prometheus-rules
+        - name: storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - port: 9090
+      targetPort: 9090
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs: ["get"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources:
+      - servicemonitors
+      - prometheusrules
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring

@@ -1,0 +1,16 @@
+[package]
+name = "aegis-proto"
+version = "0.1.0"
+edition = "2021"
+description = "Canonical protobuf types for the AEGIS platform — ScanCommand, L4Response, TLSFingerprint, L7Banner, EnrichedHost"
+license = "MIT"
+authors = ["AEGIS Team"]
+repository = "https://github.com/aegis-scanner/aegis"
+keywords = ["protobuf", "aegis", "scanner", "iceberg", "kafka"]
+categories = ["encoding", "network-programming"]
+
+[dependencies]
+prost = "0.13"
+
+[dev-dependencies]
+prost-types = "0.13"

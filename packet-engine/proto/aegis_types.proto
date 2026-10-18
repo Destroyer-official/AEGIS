@@ -1,0 +1,338 @@
+syntax = "proto3";
+
+package aegis.types;
+
+// =============================================================================
+// AEGIS Canonical Types — §7 Data Model Specification
+//
+// This is the single source of truth for all cross-crate message types.
+// Every crate in the workspace depends on this package via `aegis-proto`.
+//
+// Topics mapped:
+//   scan-commands      → ScanCommand
+//   raw-l4-scans       → L4Response
+//   tls-fingerprints   → TLSFingerprint
+//   l7-banners         → L7Banner
+//   enrichment-events  → EnrichedHost
+//
+// Frozen: 2026-08-30 — tag v0.1.0
+// =============================================================================
+
+// Local Empty message (replaces google/protobuf/empty.proto)
+message Empty {}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Transport {
+  TRANSPORT_UNSPECIFIED = 0;
+  TRANSPORT_TCP = 1;
+  TRANSPORT_UDP = 2;
+}
+
+enum TargetSource {
+  TARGET_SOURCE_UNSPECIFIED = 0;
+  TARGET_SOURCE_GPS_CO_OCCURRENCE = 1;
+  TARGET_SOURCE_GPS_FIRST_SERVICE = 2;
+  TARGET_SOURCE_6HIT_RL = 3;
+  TARGET_SOURCE_PASSIVE_CT = 4;
+  TARGET_SOURCE_PASSIVE_DNS = 5;
+  TARGET_SOURCE_BGP_SEED = 6;
+  TARGET_SOURCE_RANDOM = 7;
+}
+
+enum DetectionMethod {
+  DETECTION_METHOD_UNSPECIFIED = 0;
+  DETECTION_METHOD_PORT_NUMBER = 1;
+  DETECTION_METHOD_LZR_HEURISTIC = 2;
+  DETECTION_METHOD_ACTIVE_PROBE = 3;
+}
+
+enum HostStatus {
+  HOST_STATUS_UNSPECIFIED = 0;
+  HOST_STATUS_ACTIVE = 1;
+  HOST_STATUS_PENDING_EVICTION = 2;
+  HOST_STATUS_EVICTED = 3;
+}
+
+enum GeoTier {
+  GEO_TIER_UNSPECIFIED = 0;
+  GEO_TIER_CRYPTOGRAPHIC = 1;
+  GEO_TIER_RTT = 2;
+  GEO_TIER_PASSIVE = 3;
+}
+
+// ─── §3.3 Topic: scan-commands ───────────────────────────────────────────────
+
+// ScanCommand represents a targeting directive emitted by the intelligent
+// target generator and consumed by scanning PoPs.
+message ScanCommand {
+  uint64 command_id = 1;
+  bytes target_ip = 2;
+  uint32 port = 3;
+  Transport transport = 4;
+  double priority = 5;
+  TargetSource source = 6;
+  double conditional_probability = 7;
+  uint32 asn = 8;
+  repeated uint32 feature_tuple = 9;
+  string generated_at = 10;
+  string cidr_block = 11;
+  string asn_name = 12;
+}
+
+// ─── §3.3 Topic: raw-l4-scans ───────────────────────────────────────────────
+
+// L4Response is the raw observation record from a Phase 1 stateless probe.
+// Published by scanning agents to the raw-l4-scans Kafka topic.
+message L4Response {
+  string event_id = 1;
+  bytes target_ip = 2;
+  uint32 target_port = 3;
+  Transport transport = 4;
+
+  // SYN-ACK → open, RST → closed, ICMP → filtered
+  L4Result result = 5;
+  enum L4Result {
+    L4_RESULT_UNSPECIFIED = 0;
+    L4_RESULT_OPEN = 1;
+    L4_RESULT_CLOSED = 2;
+    L4_RESULT_FILTERED = 3;
+    L4_RESULT_HOST_ALIVE = 4;
+  }
+
+  // Round-trip time in microseconds from the probe.
+  uint32 rtt_usec = 6;
+
+  // IP TTL observed in the response.
+  uint32 ttl = 7;
+
+  // TCP window size (for TCP/IP stack fingerprinting, §6.5).
+  uint32 tcp_window = 8;
+
+  // Source PoP that generated this probe.
+  string source_pop = 9;
+
+  // ISO-8601 timestamp when probe was sent.
+  string sent_at = 10;
+
+  // ISO-8601 timestamp when response was received.
+  string received_at = 11;
+}
+
+// ─── §3.3 Topic: tls-fingerprints ───────────────────────────────────────────
+
+// TLSFingerprint captures the full JA4/JA4+ fingerprint from a TLS handshake.
+// Published to the tls-fingerprints Kafka topic.
+message TLSFingerprint {
+  string event_id = 1;
+  bytes target_ip = 2;
+  uint32 target_port = 3;
+  Transport transport = 4;
+
+  // JA4 fingerprint string: {proto}{ver}{sni}{ciphers}{exts}{alpn}_{cipher_hash}_{ext_hash}
+  string ja4 = 5;
+
+  // JA4S server fingerprint (from ServerHello).
+  string ja4s = 6;
+
+  // TLS version from handshake (e.g. "13" for TLS 1.3).
+  string tls_version = 7;
+
+  // Negotiated cipher suite.
+  string cipher_suite = 8;
+
+  // SNI value (empty if no SNI).
+  string sni = 9;
+
+  // ALPN negotiated protocol (e.g. "h2", "grpc").
+  string alpn = 10;
+
+  // Full certificate chain as concatenated PEM blocks.
+  string certificate_chain = 11;
+
+  // Leaf certificate SHA-256 fingerprint.
+  string cert_fingerprint = 12;
+
+  // Leaf certificate subject CN.
+  string cert_subject_cn = 13;
+
+  // Leaf certificate issuer CN.
+  string cert_issuer_cn = 14;
+
+  // Subject Alternative Names from leaf cert.
+  repeated string cert_sans = 15;
+
+  // Source PoP.
+  string source_pop = 16;
+
+  // Timestamp.
+  string observed_at = 17;
+}
+
+// ─── §3.3 Topic: l7-banners ─────────────────────────────────────────────────
+
+// L7Banner captures the application-layer response from a Phase 2 interrogation.
+// Published to the l7-banners Kafka topic.
+message L7Banner {
+  string event_id = 1;
+  bytes target_ip = 2;
+  uint32 target_port = 3;
+  Transport transport = 4;
+
+  // Post-LZR reclassified protocol (§6.2).
+  // E.g. "HTTP/1.1", "SSH", "MySQL", "PostgreSQL".
+  string protocol = 5;
+
+  // How this protocol was identified.
+  DetectionMethod detection_method = 6;
+
+  // Raw banner bytes (hex-encoded for storage).
+  bytes raw_banner = 7;
+
+  // UTF-8 safe sanitized banner.
+  string sanitized_banner = 8;
+
+  // SHA-256 hash of the sanitized banner.
+  string banner_hash = 9;
+
+  // ─── HTTP fields ───
+  string http_method = 10;
+  uint32 http_status_code = 11;
+  string http_server = 12;
+
+  // ─── SSH fields (§6.4) ───
+  string ssh_version = 13;
+  string ssh_key_exchange_algorithms = 14;
+  string ssh_host_key_type = 15;
+
+  // ─── Database fields ───
+  string db_version = 16;
+
+  // Source PoP.
+  string source_pop = 17;
+
+  // Timestamp.
+  string observed_at = 18;
+}
+
+// ─── §7.4 Enriched Record (Flink → Iceberg) ─────────────────────────────────
+
+// EnrichedHost is the final, deduplicated, enriched record written to Iceberg.
+// Combines data from L4Response, TLSFingerprint, L7Banner, and enrichment
+// pipelines (geolocation §3.5.1, CVE correlation §3.5.2, asset graph §3.5.3).
+message EnrichedHost {
+  // ─── §7.1 Host Record ───
+  string ip_address = 1;
+  string host_id = 2;
+  uint32 asn = 3;
+  string organization = 4;
+  string bgp_prefix = 5;
+  string bgp_as_path = 6;
+  string reverse_dns = 7;
+  string forward_dns = 8;
+
+  // Geolocation (§3.5.1 three-tier fallback)
+  GeoTier geo_tier_used = 9;
+  double geo_latitude = 10;
+  double geo_longitude = 11;
+  string geo_city = 12;
+  string geo_country = 13;
+  float geo_confidence = 14;
+
+  int64 first_seen = 15;
+  int64 last_seen = 16;
+  int32 scan_count = 17;
+  HostStatus status = 18;
+
+  // ─── §7.2 Service Record (flattened for Iceberg) ───
+  uint32 port = 20;
+  Transport transport = 21;
+  string reclassified_protocol = 22;
+  DetectionMethod detection_method = 23;
+  string sanitized_banner = 24;
+  string banner_hash = 25;
+
+  // TLS / JA4+ (§6.1)
+  string ja4 = 30;
+  string ja4s = 31;
+  string tls_version = 32;
+  string cipher_suite = 33;
+  string sni = 34;
+  string alpn = 35;
+
+  // HTTP (§6.3)
+  string http_method = 40;
+  uint32 http_status_code = 41;
+  string http_server = 42;
+
+  // SSH (§6.4)
+  string ssh_version = 43;
+  string ssh_key_exchange_algorithms = 44;
+  string ssh_host_key_type = 45;
+
+  // ─── §7.3 Certificate Record ───
+  string cert_sha256 = 50;
+  string cert_serial = 51;
+  string cert_subject_cn = 52;
+  string cert_issuer_cn = 53;
+  string cert_organization = 54;
+  repeated string cert_sans = 55;
+  int64 cert_not_before = 56;
+  int64 cert_not_after = 57;
+  bool cert_is_expired = 58;
+  string cert_rpki_status = 59;
+  string cert_roa_prefix = 60;
+
+  // ─── §3.5.2 Vulnerability Correlation ───
+  repeated string cves = 70;
+  repeated float cvss_scores = 71;
+
+  // ─── Provenance ───
+  string source_pop = 80;
+  string event_id = 81;
+}
+
+// ─── §6.2 LZR Classification Messages ────────────────────────────────────────
+
+// ClassifyRequest is sent to the LZR gRPC service for protocol classification.
+message ClassifyRequest {
+  // Raw payload bytes (up to 64KB).
+  bytes payload = 1;
+  // Optional: hint from TLS/QUIC layer for priority tiebreaking.
+  string tls_hint = 2;
+  // Optional: source IP for logging.
+  bytes source_ip = 3;
+}
+
+// ClassifyResponse contains the LZR classification result.
+message ClassifyResponse {
+  // Matched protocol name (e.g., "HTTP/1.1", "SSH", "MySQL").
+  string protocol = 1;
+  // Protocol category (e.g., "web", "remote", "database").
+  string category = 2;
+  // Priority of the matching signature (0-100).
+  uint32 priority = 3;
+  // Whether a signature matched at position 0.
+  bool matched = 4;
+  // Classification latency in microseconds.
+  uint64 latency_us = 5;
+  // Number of signatures loaded in the engine.
+  uint32 signature_count = 6;
+}
+
+// ClassifyBatchRequest allows classifying multiple payloads in one call.
+message ClassifyBatchRequest {
+  repeated ClassifyRequest requests = 1;
+}
+
+// ClassifyBatchResponse contains results for each payload.
+message ClassifyBatchResponse {
+  repeated ClassifyResponse responses = 1;
+}
+
+// HealthCheckResponse for LZR service health checks.
+message HealthCheckResponse {
+  bool ready = 1;
+  uint32 signature_count = 2;
+  string version = 3;
+}

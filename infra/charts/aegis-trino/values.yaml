@@ -1,0 +1,42 @@
+coordinator:
+  replicas: 1
+  image:
+    repository: trinodb/trino
+    tag: "433"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "1536Mi"
+      cpu: "250m"
+    limits:
+      memory: "2048Mi"
+      cpu: "1000m"
+  httpPort: 8080
+  jvm:
+    maxHeapSize: "1024m"
+    # Note: For kind (4GB RAM), 1024m heap + overhead fits in 1536Mi request
+    # -Xmx1024m -XX:MaxRAMPercentage=65
+
+worker:
+  replicas: 0
+  image:
+    repository: trinodb/trino
+    tag: "433"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+
+catalog:
+  name: aegis
+  type: iceberg
+  restCatalogUrl: http://aegis-polaris:19120/iceberg
+
+# Resource summary for kind (4GB RAM node):
+# coordinator request: 1536Mi (JVM heap 1024m + overhead)
+# other pods total request: ~1.5Gi
+# total requests: ~3.0Gi (leaves ~1Gi for kubelet/system)

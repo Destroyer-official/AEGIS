@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "af_xdp",
+    "lzr",
+    "sequence",
+    "traversal",
+    "targeting/ipv4",
+    "targeting/passive",
+    "interrogation/tls",
+    "interrogation/grpc",
+    "interrogation/quic",
+    "interrogation/behavioral",
+    "interrogation/emerging",
+]
+exclude = [
+    "lzr/fuzz",
+    "fuzz",
+    "proto",
+]
+resolver = "2"

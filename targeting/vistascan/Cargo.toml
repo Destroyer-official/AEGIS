@@ -1,0 +1,10 @@
+[package]
+name = "aegis-vistascan"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "VistaScan visibility-aware distributed scanning — anchor selection, visibility matrix, load-aware allocation"
+
+[dependencies]
+thiserror = "2"

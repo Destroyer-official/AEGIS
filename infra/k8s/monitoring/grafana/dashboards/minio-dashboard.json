@@ -1,0 +1,150 @@
+{
+  "dashboard": {
+    "title": "AEGIS MinIO Monitoring",
+    "uid": "aegis-minio",
+    "tags": ["aegis", "minio", "s3", "storage"],
+    "timezone": "utc",
+    "refresh": "10s",
+    "time": {"from": "now-1h", "to": "now"},
+    "panels": [
+      {
+        "id": 1,
+        "title": "MinIO Up",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "up{job=\"minio\"}", "legendFormat": "MinIO"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}
+      },
+      {
+        "id": 2,
+        "title": "Disk Usage %",
+        "type": "gauge",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "minio_disk_usage_bytes / minio_disk_capacity_bytes", "legendFormat": "Usage %"}],
+        "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.7}, {"color": "red", "value": 0.85}]}}}
+      },
+      {
+        "id": 3,
+        "title": "Disk Usage (GB)",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "minio_disk_usage_bytes / 1024 / 1024 / 1024", "legendFormat": "Used"}],
+        "fieldConfig": {"defaults": {"unit": "GB"}}
+      },
+      {
+        "id": 4,
+        "title": "Disk Capacity (GB)",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "minio_disk_capacity_bytes / 1024 / 1024 / 1024", "legendFormat": "Capacity"}],
+        "fieldConfig": {"defaults": {"unit": "GB"}}
+      },
+      {
+        "id": 5,
+        "title": "Bucket Usage - aegis-warehouse",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "targets": [{"expr": "minio_bucket_usage_bytes{bucket=\"aegis-warehouse\"} / 1024 / 1024 / 1024", "legendFormat": "Used (GB)"}],
+        "fieldConfig": {"defaults": {"unit": "GB"}}
+      },
+      {
+        "id": 6,
+        "title": "Bucket Objects - aegis-warehouse",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+        "targets": [{"expr": "minio_bucket_objects{bucket=\"aegis-warehouse\"}", "legendFormat": "Objects"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 7,
+        "title": "HTTP Requests/sec",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+        "targets": [{"expr": "rate(minio_http_requests_total[1m])", "legendFormat": "{{method}} {{status_code}}"}],
+        "fieldConfig": {"defaults": {"unit": "ops"}}
+      },
+      {
+        "id": 8,
+        "title": "HTTP Errors (5xx)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+        "targets": [{"expr": "rate(minio_http_requests_total{status_code=~\"5..\"}[1m])", "legendFormat": "{{method}}"}],
+        "fieldConfig": {"defaults": {"unit": "ops", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 0.1}]}}}
+      },
+      {
+        "id": 9,
+        "title": "Network I/O",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "rate(minio_network_received_bytes_total[1m]) / 1024 / 1024", "legendFormat": "Received (MB/s)"},
+          {"expr": "rate(minio_network_sent_bytes_total[1m]) / 1024 / 1024", "legendFormat": "Sent (MB/s)"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "MBps"}}
+      },
+      {
+        "id": 10,
+        "title": "S3 API Latency (p50, p95, p99)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "histogram_quantile(0.50, sum(rate(minio_s3_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50"},
+          {"expr": "histogram_quantile(0.95, sum(rate(minio_s3_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"},
+          {"expr": "histogram_quantile(0.99, sum(rate(minio_s3_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "s"}}
+      },
+      {
+        "id": 11,
+        "title": "PUT/GET Object Latency",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "rate(minio_s3_put_object_duration_seconds_sum[5m]) / rate(minio_s3_put_object_duration_seconds_count[5m])", "legendFormat": "PUT"},
+          {"expr": "rate(minio_s3_get_object_duration_seconds_sum[5m]) / rate(minio_s3_get_object_duration_seconds_count[5m])", "legendFormat": "GET"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "s"}}
+      },
+      {
+        "id": 12,
+        "title": "Active Connections",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+        "targets": [{"expr": "minio_s3_active_connections", "legendFormat": "Active"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 13,
+        "title": "All Buckets Usage",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 36, "w": 24, "h": 8},
+        "targets": [{"expr": "minio_bucket_usage_bytes / 1024 / 1024 / 1024", "legendFormat": "{{bucket}}"}],
+        "fieldConfig": {"defaults": {"unit": "GB"}}
+      },
+      {
+        "id": 14,
+        "title": "All Buckets Object Count",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 44, "w": 12, "h": 8},
+        "targets": [{"expr": "minio_bucket_objects", "legendFormat": "{{bucket}}"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 15,
+        "title": "Offline Disks",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 36, "w": 6, "h": 4},
+        "targets": [{"expr": "minio_cluster_disk_offline_count", "legendFormat": "Offline"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}}
+      },
+      {
+        "id": 16,
+        "title": "Degraded Disks",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 36, "w": 6, "h": 4},
+        "targets": [{"expr": "minio_cluster_disk_degraded_count", "legendFormat": "Degraded"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}]}}}
+      }
+    ]
+  }
+}

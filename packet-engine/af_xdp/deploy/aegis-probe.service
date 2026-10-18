@@ -1,0 +1,41 @@
+[Unit]
+Description=AEGIS AF_XDP Probe Engine
+Documentation=https://github.com/aegis-project/aegis
+After=network-online.target kafka.service
+Wants=network-online.target
+Requires=aegis-probe.socket
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/aegis-probe
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+# Security hardening
+NoNewPrivileges=no
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/aegis /etc/aegis
+PrivateTmp=yes
+
+# Capabilities required for AF_XDP + CAP_BPF
+AmbientCapabilities=CAP_BPF CAP_NET_RAW CAP_IPC_LOCK CAP_SYS_NICE
+CapabilityBoundingSet=CAP_BPF CAP_NET_RAW CAP_IPC_LOCK CAP_SYS_NICE
+
+# Resource limits
+LimitMEMLOCK=infinity
+LimitNPROC=4096
+
+# Environment
+Environment=RUST_LOG=info
+Environment=AEGIS_CONFIG=/etc/aegis/probe.toml
+EnvironmentFile=-/etc/aegis/probe.env
+
+# Watchdog
+WatchdogSec=30
+NotifyAccess=main
+
+[Install]
+WantedBy=multi-user.target

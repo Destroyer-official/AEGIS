@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-create-topics
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: kafka-topics
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for Kafka to be ready..."
+              sleep 30
+              {{- range .Values.topics }}
+              echo "Creating topic: {{ .name }}"
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server {{ $.Release.Name }}:9092 \
+                --create \
+                --if-not-exists \
+                --topic {{ .name }} \
+                --partitions {{ .partitions }} \
+                --replication-factor {{ .replicationFactor }} \
+                {{- if .config }}
+                {{- range $key, $value := .config }}
+                --config {{ $key }}={{ $value }} \
+                {{- end }}
+                {{- end }}
+              || echo "Topic {{ .name }} may already exist"
+              {{- end }}
+              echo "Listing all topics:"
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server {{ .Release.Name }}:9092 \
+                --list
+              echo "Topic creation complete"

@@ -1,0 +1,41 @@
+jobmanager:
+  replicas: 1
+  image:
+    repository: flink
+    tag: "1.20-java17"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "384Mi"
+      cpu: "250m"
+  rpcPort: 6123
+  httpPort: 8081
+
+taskmanager:
+  replicas: 1
+  image:
+    repository: flink
+    tag: "1.20-java17"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "250m"
+  rpcPort: 6122
+  slots: 2
+
+checkpoint:
+  intervalMs: 60000
+  minPauseMs: 30000
+  timeoutMs: 120000
+  mode: EXACTLY_ONCE
+
+stateBackend:
+  type: rocksdb
+  incremental: true

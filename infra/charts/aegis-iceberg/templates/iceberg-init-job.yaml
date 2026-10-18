@@ -1,0 +1,151 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-init-tables
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-nessie
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z aegis-polaris 19120; do echo waiting for nessie; sleep 5; done']
+      containers:
+        - name: init-iceberg
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              pip install requests >/dev/null 2>&1
+              python3 << 'EOF'
+              import requests
+              import json
+              import time
+
+              NESSIE = "{{ .Values.nessie.endpoint }}"
+              CATALOG = "{{ .Values.nessie.catalog }}"
+              NAMESPACE = "{{ .Values.namespace }}"
+
+              session = requests.Session()
+              session.headers.update({
+                  "Content-Type": "application/json",
+                  "Accept": "application/json"
+              })
+
+              def create_namespace(ns):
+                  url = f"{NESSIE}/api/v2/catalogs/{CATALOG}/namespaces"
+                  resp = session.post(url, json={"namespace": [ns], "properties": {}})
+                  if resp.status_code in (200, 201, 409):
+                      print(f"Namespace '{ns}' ready")
+                  else:
+                      print(f"Create namespace failed: {resp.status_code} {resp.text}")
+
+              def create_table(ns, table_name, schema):
+                  url = f"{NESSIE}/api/v2/catalogs/{CATALOG}/namespaces/{ns}/tables"
+                  payload = {
+                      "name": table_name,
+                      "schema": {
+                          "type": "struct",
+                          "fields": schema
+                      },
+                      "partitionSpec": {
+                          "specId": 0,
+                          "fields": [{"name": "first_seen_day", "transform": "day", "sourceId": None, "fieldId": None, "transform_arguments": []}]
+                      },
+                      "writeDistributionMode": "hash",
+                      "properties": {
+                          "format-version": "2",
+                          "write.target-file-size-bytes": "134217728",
+                          "write.distribution-mode": "hash"
+                      }
+                  }
+                  resp = session.post(url, json=payload)
+                  if resp.status_code in (200, 201, 409):
+                      print(f"Table '{ns}.{table_name}' ready")
+                  else:
+                      print(f"Create table failed: {resp.status_code} {resp.text}")
+
+              create_namespace(NAMESPACE)
+
+              hosts_schema = [
+                  {"id": 1, "name": "ip_address", "type": {"type": "string"}, "required": True},
+                  {"id": 2, "name": "host_id", "type": {"type": "string"}, "required": True},
+                  {"id": 3, "name": "asn", "type": {"type": "long"}, "required": False},
+                  {"id": 4, "name": "organization", "type": {"type": "string"}, "required": False},
+                  {"id": 5, "name": "bgp_prefix", "type": {"type": "string"}, "required": False},
+                  {"id": 6, "name": "bgp_as_path", "type": {"type": "string"}, "required": False},
+                  {"id": 7, "name": "reverse_dns", "type": {"type": "string"}, "required": False},
+                  {"id": 8, "name": "forward_dns", "type": {"type": "string"}, "required": False},
+                  {"id": 9, "name": "geo_tier_used", "type": {"type": "string"}, "required": False},
+                  {"id": 10, "name": "geo_latitude", "type": {"type": "double"}, "required": False},
+                  {"id": 11, "name": "geo_longitude", "type": {"type": "double"}, "required": False},
+                  {"id": 12, "name": "geo_city", "type": {"type": "string"}, "required": False},
+                  {"id": 13, "name": "geo_country", "type": {"type": "string"}, "required": False},
+                  {"id": 14, "name": "geo_confidence", "type": {"type": "float"}, "required": False},
+                  {"id": 15, "name": "first_seen", "type": {"type": "long"}, "required": True},
+                  {"id": 16, "name": "last_seen", "type": {"type": "long"}, "required": True},
+                  {"id": 17, "name": "scan_count", "type": {"type": "int"}, "required": False},
+                  {"id": 18, "name": "status", "type": {"type": "string"}, "required": True},
+                  {"id": 19, "name": "first_seen_day", "type": {"type": "string"}, "required": False}
+              ]
+
+              services_schema = [
+                  {"id": 1, "name": "host_ip", "type": {"type": "string"}, "required": True},
+                  {"id": 2, "name": "transport_protocol", "type": {"type": "string"}, "required": True},
+                  {"id": 3, "name": "port_number", "type": {"type": "long"}, "required": True},
+                  {"id": 4, "name": "reclassified_protocol", "type": {"type": "string"}, "required": False},
+                  {"id": 5, "name": "detection_method", "type": {"type": "string"}, "required": False},
+                  {"id": 6, "name": "raw_banner", "type": {"type": "string"}, "required": False},
+                  {"id": 7, "name": "sanitized_banner", "type": {"type": "string"}, "required": False},
+                  {"id": 8, "name": "banner_hash", "type": {"type": "string"}, "required": False},
+                  {"id": 9, "name": "ja4_fingerprint", "type": {"type": "string"}, "required": False},
+                  {"id": 10, "name": "ja4s_fingerprint", "type": {"type": "string"}, "required": False},
+                  {"id": 11, "name": "tls_version", "type": {"type": "string"}, "required": False},
+                  {"id": 12, "name": "cipher_suite", "type": {"type": "string"}, "required": False},
+                  {"id": 13, "name": "certificate_chain", "type": {"type": "string"}, "required": False},
+                  {"id": 14, "name": "http_method", "type": {"type": "string"}, "required": False},
+                  {"id": 15, "name": "http_status", "type": {"type": "long"}, "required": False},
+                  {"id": 16, "name": "ssh_version", "type": {"type": "string"}, "required": False},
+                  {"id": 17, "name": "ssh_kex_algorithms", "type": {"type": "string"}, "required": False},
+                  {"id": 18, "name": "cves", "type": {"type": "array", "element-id": 180, "element": {"type": "string"}}, "required": False},
+                  {"id": 19, "name": "cvss_scores", "type": {"type": "array", "element-id": 190, "element": {"type": "float"}}, "required": False},
+                  {"id": 20, "name": "first_seen", "type": {"type": "long"}, "required": True},
+                  {"id": 21, "name": "last_seen", "type": {"type": "long"}, "required": True},
+                  {"id": 22, "name": "status", "type": {"type": "string"}, "required": True},
+                  {"id": 23, "name": "first_seen_day", "type": {"type": "string"}, "required": False}
+              ]
+
+              certificates_schema = [
+                  {"id": 1, "name": "sha256_fingerprint", "type": {"type": "string"}, "required": True},
+                  {"id": 2, "name": "serial_number", "type": {"type": "string"}, "required": True},
+                  {"id": 3, "name": "cert_pem", "type": {"type": "string"}, "required": False},
+                  {"id": 4, "name": "subject", "type": {"type": "string"}, "required": False},
+                  {"id": 5, "name": "issuer", "type": {"type": "string"}, "required": False},
+                  {"id": 6, "name": "subject_cn", "type": {"type": "string"}, "required": False},
+                  {"id": 7, "name": "issuer_cn", "type": {"type": "string"}, "required": False},
+                  {"id": 8, "name": "organization", "type": {"type": "string"}, "required": False},
+                  {"id": 9, "name": "sans", "type": {"type": "array", "element-id": 90, "element": {"type": "string"}}, "required": False},
+                  {"id": 10, "name": "not_before", "type": {"type": "long"}, "required": False},
+                  {"id": 11, "name": "not_after", "type": {"type": "long"}, "required": False},
+                  {"id": 12, "name": "is_expired", "type": {"type": "boolean"}, "required": False},
+                  {"id": 13, "name": "certificate_chain", "type": {"type": "array", "element-id": 130, "element": {"type": "string"}}, "required": False},
+                  {"id": 14, "name": "rpki_validation_status", "type": {"type": "string"}, "required": False},
+                  {"id": 15, "name": "roa_prefix", "type": {"type": "string"}, "required": False},
+                  {"id": 16, "name": "first_seen", "type": {"type": "long"}, "required": True},
+                  {"id": 17, "name": "last_seen", "type": {"type": "long"}, "required": True}
+              ]
+
+              create_namespace(NAMESPACE)
+
+              create_table(NAMESPACE, "hosts", hosts_schema)
+              create_table(NAMESPACE, "services", services_schema)
+              create_table(NAMESPACE, "certificates", certificates_schema)
+
+              print("All tables initialized successfully")
+              EOF

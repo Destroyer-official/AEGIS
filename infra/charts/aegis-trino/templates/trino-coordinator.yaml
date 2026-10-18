@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-coordinator
+  labels:
+    app: {{ .Release.Name }}
+    component: coordinator
+spec:
+  replicas: {{ .Values.coordinator.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+      component: coordinator
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+        component: coordinator
+    spec:
+      containers:
+        - name: trino
+          image: "{{ .Values.coordinator.image.repository }}:{{ .Values.coordinator.image.tag }}"
+          imagePullPolicy: {{ .Values.coordinator.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xmx1024m"
+          resources:
+            {{- toYaml .Values.coordinator.resources | nindent 12 }}
+          volumeMounts:
+            - name: catalog
+              mountPath: /etc/trino/catalog
+            - name: config
+              mountPath: /etc/trino/config.properties
+              subPath: config.properties
+            - name: config
+              mountPath: /etc/trino/log.properties
+              subPath: log.properties
+      volumes:
+        - name: catalog
+          configMap:
+            name: {{ .Release.Name }}-catalog
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-config

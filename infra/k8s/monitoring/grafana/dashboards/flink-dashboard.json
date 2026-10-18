@@ -1,0 +1,144 @@
+{
+  "dashboard": {
+    "title": "AEGIS Flink Monitoring",
+    "uid": "aegis-flink",
+    "tags": ["aegis", "flink", "streaming"],
+    "timezone": "utc",
+    "refresh": "10s",
+    "time": {"from": "now-1h", "to": "now"},
+    "panels": [
+      {
+        "id": 1,
+        "title": "JobManager Up",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "up{job=\"flink-jobmanager\"}", "legendFormat": "JobManager"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}
+      },
+      {
+        "id": 2,
+        "title": "TaskManager Up",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "up{job=\"flink-taskmanager\"}", "legendFormat": "TaskManager"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}
+      },
+      {
+        "id": 3,
+        "title": "Running Jobs",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "count(flink_jobmanager_job_status{status=\"RUNNING\"})", "legendFormat": "Running"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}
+      },
+      {
+        "id": 4,
+        "title": "Failed Jobs",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "count(flink_jobmanager_job_status{status=\"FAILED\"})", "legendFormat": "Failed"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}}
+      },
+      {
+        "id": 5,
+        "title": "Job Status Table",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 4, "w": 24, "h": 8},
+        "targets": [
+          {"expr": "flink_jobmanager_job_status", "format": "table"},
+          {"expr": "flink_jobmanager_job_last_checkpoint_duration", "format": "table"},
+          {"expr": "flink_jobmanager_job_last_checkpoint_size", "format": "table"},
+          {"expr": "flink_jobmanager_job_number_of_completed_checkpoints", "format": "table"},
+          {"expr": "flink_jobmanager_job_number_of_failed_checkpoints", "format": "table"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Checkpoint Duration",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+        "targets": [{"expr": "flink_jobmanager_job_last_checkpoint_duration", "legendFormat": "{{job_name}}"}],
+        "fieldConfig": {"defaults": {"unit": "ms", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 60000}, {"color": "red", "value": 300000}]}}}
+      },
+      {
+        "id": 7,
+        "title": "Checkpoint Size",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+        "targets": [{"expr": "flink_jobmanager_job_last_checkpoint_size / 1024 / 1024", "legendFormat": "{{job_name}}"}],
+        "fieldConfig": {"defaults": {"unit": "MB"}}
+      },
+      {
+        "id": 8,
+        "title": "Completed Checkpoints",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+        "targets": [{"expr": "flink_jobmanager_job_number_of_completed_checkpoints", "legendFormat": "{{job_name}}"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 9,
+        "title": "Failed Checkpoints",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+        "targets": [{"expr": "flink_jobmanager_job_number_of_failed_checkpoints", "legendFormat": "{{job_name}}"}],
+        "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}}
+      },
+      {
+        "id": 10,
+        "title": "Checkpoint Alignment Duration",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+        "targets": [{"expr": "flink_jobmanager_job_last_checkpoint_alignment_buffered", "legendFormat": "{{job_name}}"}],
+        "fieldConfig": {"defaults": {"unit": "bytes"}}
+      },
+      {
+        "id": 11,
+        "title": "TaskManager Slots",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "flink_taskmanager_status_total_slots", "legendFormat": "Total"},
+          {"expr": "flink_taskmanager_status_free_slots", "legendFormat": "Free"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 12,
+        "title": "Backpressure Ratio",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 36, "w": 12, "h": 8},
+        "targets": [{"expr": "flink_taskmanager_job_task_backpressure_ratio", "legendFormat": "{{task_name}}"}],
+        "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.1}, {"color": "red", "value": 0.5}]}}}
+      },
+      {
+        "id": 13,
+        "title": "TaskManager Memory",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 36, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "flink_taskmanager_Status_JVM_Memory_Heap_Used / 1024 / 1024", "legendFormat": "Heap Used"},
+          {"expr": "flink_taskmanager_Status_JVM_Memory_Heap_Committed / 1024 / 1024", "legendFormat": "Heap Committed"},
+          {"expr": "flink_taskmanager_Status_JVM_Memory_Heap_Max / 1024 / 1024", "legendFormat": "Heap Max"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "MB"}}
+      },
+      {
+        "id": 14,
+        "title": "Records Processed/sec",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 44, "w": 12, "h": 8},
+        "targets": [{"expr": "rate(flink_taskmanager_job_task_numRecordsOutPerSecond[1m])", "legendFormat": "{{task_name}}"}],
+        "fieldConfig": {"defaults": {"unit": "ops"}}
+      },
+      {
+        "id": 15,
+        "title": "Busy Time %",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 44, "w": 12, "h": 8},
+        "targets": [{"expr": "flink_taskmanager_job_task_idleTimeMsPerSecond / 1000", "legendFormat": "{{task_name}}"}],
+        "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}}
+      }
+    ]
+  }
+}

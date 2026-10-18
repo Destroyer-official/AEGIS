@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: nessie
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 19120
+              name: http
+          env:
+            - name: QUIRKS_PROFILE
+              value: "iceberg"
+            - name: CATALOG_NAME
+              value: "aegis"
+            - name: VERSION_STORE_TYPE
+              value: {{ .Values.nessie.versionStoreType | quote }}
+            - name: DEFAULT_BRANCH
+              value: {{ .Values.nessie.defaultBranch | quote }}
+            - name: NESSIE_S3_ENDPOINT
+              value: {{ .Values.nessie.s3.endpoint | quote }}
+            - name: NESSIE_S3_ACCESS_KEY_ID
+              value: {{ .Values.nessie.s3.accessKeyId | quote }}
+            - name: NESSIE_S3_SECRET_ACCESS_KEY
+              value: {{ .Values.nessie.s3.secretAccessKey | quote }}
+            - name: NESSIE_S3_BUCKET
+              value: {{ .Values.nessie.s3.bucket | quote }}
+            - name: NESSIE_S3_REGION
+              value: {{ .Values.nessie.s3.region | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

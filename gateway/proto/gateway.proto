@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package aegis.gateway;
+
+message QueryRequest {
+  string sql = 1;
+  map<string, string> options = 2;
+}
+
+message QueryResponse {
+  repeated Column columns = 1;
+  repeated Row rows = 2;
+  int64 total_rows = 3;
+  string query_id = 4;
+}
+
+message Column {
+  string name = 1;
+  string data_type = 2;
+}
+
+message Row {
+  repeated string values = 1;
+}
+
+message StreamRequest {
+  string sql = 1;
+  int32 batch_size = 2;
+}
+
+message StreamChunk {
+  repeated Row rows = 1;
+  bool is_last = 2;
+  string query_id = 3;
+}
+
+service QueryService {
+  rpc ExecuteQuery(QueryRequest) returns (QueryResponse);
+  rpc StreamQuery(StreamRequest) returns (stream StreamChunk);
+}

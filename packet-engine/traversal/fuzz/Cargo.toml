@@ -1,0 +1,37 @@
+[package]
+name = "aegis-traversal-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = { version = "0.4", features = ["link_libfuzzer"] }
+
+[dependencies.aegis-traversal]
+path = ".."
+
+[[bin]]
+name = "permutation_fuzz"
+path = "fuzz_targets/permutation_fuzz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shard_fuzz"
+path = "fuzz_targets/shard_fuzz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ipv4_fuzz"
+path = "fuzz_targets/ipv4_fuzz.rs"
+test = false
+doc = false
+bench = false

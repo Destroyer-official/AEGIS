@@ -1,0 +1,95 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: flink-jobmanager-chaos
+  namespace: litmus
+spec:
+  appinfo:
+    appns: "default"
+    applabel: "component=jobmanager"
+    appkind: "deployment"
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "60"
+            - name: CHAOS_INTERVAL
+              value: "10"
+            - name: FORCE
+              value: "false"
+            - name: PODS_AFFECTED_PERC
+              value: "100"
+            - name: TARGET_PODS
+              value: ""
+            - name: TARGET_CONTAINER
+              value: ""
+            - name: RAMP_TIME
+              value: ""
+            - name: SEQUENCE
+              value: "parallel"
+            - name: LIB
+              value: "litmus"
+            - name: LIB_IMAGE
+              value: "litmuschaos/litmus-lib:latest"
+            - name: LIB_PULL_POLICY
+              value: "Always"
+            - name: NAMESPACE
+              value: "default"
+            - name: APP_LABEL
+              value: "component=jobmanager"
+            - name: APP_NS
+              value: "default"
+          runner:
+            image: litmuschaos/go-runner:latest
+            imagePullPolicy: Always
+---
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: flink-taskmanager-chaos
+  namespace: litmus
+spec:
+  appinfo:
+    appns: "default"
+    applabel: "component=taskmanager"
+    appkind: "deployment"
+  chaosServiceAccount: litmus-admin
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            - name: TOTAL_CHAOS_DURATION
+              value: "60"
+            - name: CHAOS_INTERVAL
+              value: "10"
+            - name: FORCE
+              value: "false"
+            - name: PODS_AFFECTED_PERC
+              value: "100"
+            - name: TARGET_PODS
+              value: ""
+            - name: TARGET_CONTAINER
+              value: ""
+            - name: RAMP_TIME
+              value: ""
+            - name: SEQUENCE
+              value: "parallel"
+            - name: LIB
+              value: "litmus"
+            - name: LIB_IMAGE
+              value: "litmuschaos/litmus-lib:latest"
+            - name: LIB_PULL_POLICY
+              value: "Always"
+            - name: NAMESPACE
+              value: "default"
+            - name: APP_LABEL
+              value: "component=taskmanager"
+            - name: APP_NS
+              value: "default"
+          runner:
+            image: litmuschaos/go-runner:latest
+            imagePullPolicy: Always

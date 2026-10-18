@@ -1,0 +1,10 @@
+[Unit]
+Description=AEGIS Probe Metrics Socket
+PartOf=aegis-probe.service
+
+[Socket]
+ListenStream=9090
+Accept=no
+
+[Install]
+WantedBy=sockets.target

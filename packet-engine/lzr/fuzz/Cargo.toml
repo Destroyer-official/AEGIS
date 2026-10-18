@@ -1,0 +1,12 @@
+[package]
+name = "aegis-lzr-fuzz"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+aegis-lzr = { path = ".." }
+proptest = "1"
+arbitrary = "1"

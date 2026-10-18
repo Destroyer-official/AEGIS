@@ -1,0 +1,145 @@
+{
+  "dashboard": {
+    "title": "AEGIS Kubernetes Cluster",
+    "uid": "aegis-k8s",
+    "tags": ["aegis", "kubernetes", "cluster", "infrastructure"],
+    "timezone": "utc",
+    "refresh": "10s",
+    "time": {"from": "now-1h", "to": "now"},
+    "panels": [
+      {
+        "id": 1,
+        "title": "Cluster Nodes Ready",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "count(kube_node_status_condition{condition=\"Ready\",status=\"true\"})", "legendFormat": "Ready"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}
+      },
+      {
+        "id": 2,
+        "title": "Total Pods",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "count(kube_pod_info)", "legendFormat": "Total"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 3,
+        "title": "Running Pods",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "count(kube_pod_status_phase{phase=\"Running\"})", "legendFormat": "Running"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}}
+      },
+      {
+        "id": 4,
+        "title": "Failed/Pending Pods",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {"expr": "count(kube_pod_status_phase{phase=\"Failed\"})", "legendFormat": "Failed"},
+          {"expr": "count(kube_pod_status_phase{phase=\"Pending\"})", "legendFormat": "Pending"}
+        ],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}}}
+      },
+      {
+        "id": 5,
+        "title": "Node CPU Usage",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "targets": [{"expr": "sum(rate(node_cpu_seconds_total{mode!=\"idle\"}[5m])) by (instance)", "legendFormat": "{{instance}}"}],
+        "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}}
+      },
+      {
+        "id": 6,
+        "title": "Node Memory Usage",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+        "targets": [{"expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes", "legendFormat": "{{instance}}"}],
+        "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.7}, {"color": "red", "value": 0.85}]}}}
+      },
+      {
+        "id": 7,
+        "title": "Node Disk Usage",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+        "targets": [{"expr": "(node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes", "legendFormat": "{{instance}} - {{mountpoint}}"}],
+        "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.8}, {"color": "red", "value": 0.9}]}}}
+      },
+      {
+        "id": 8,
+        "title": "Network I/O",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "rate(node_network_receive_bytes_total[5m]) / 1024 / 1024", "legendFormat": "Received {{device}}"},
+          {"expr": "rate(node_network_transmit_bytes_total[5m]) / 1024 / 1024", "legendFormat": "Transmit {{device}}"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "MBps"}}
+      },
+      {
+        "id": 9,
+        "title": "Pod CPU Usage (Top 10)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+        "targets": [{"expr": "topk(10, sum(rate(container_cpu_usage_seconds_total{container!=\"\"}[5m])) by (pod, namespace))", "legendFormat": "{{namespace}}/{{pod}}"}],
+        "fieldConfig": {"defaults": {"unit": "cores"}}
+      },
+      {
+        "id": 10,
+        "title": "Pod Memory Usage (Top 10)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+        "targets": [{"expr": "topk(10, sum(container_memory_working_set_bytes{container!=\"\"}) by (pod, namespace) / 1024 / 1024)", "legendFormat": "{{namespace}}/{{pod}}"}],
+        "fieldConfig": {"defaults": {"unit": "MB"}}
+      },
+      {
+        "id": 11,
+        "title": "Pod Restarts (Last Hour)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+        "targets": [{"expr": "increase(kube_pod_container_status_restarts_total[1h])", "legendFormat": "{{namespace}}/{{pod}}"}],
+        "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 1}, {"color": "red", "value": 5}]}}}
+      },
+      {
+        "id": 12,
+        "title": "Container OOM Kills",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+        "targets": [{"expr": "increase(container_oom_events_total[1h])", "legendFormat": "{{namespace}}/{{pod}}"}],
+        "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}}
+      },
+      {
+        "id": 13,
+        "title": "AEGIS Pod Status",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 36, "w": 24, "h": 8},
+        "targets": [{"expr": "kube_pod_status_phase{namespace=\"default\",pod=~\"aegis-.*\"}", "format": "table"}]
+      },
+      {
+        "id": 14,
+        "title": "AEGIS Resource Requests vs Limits",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 44, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "sum(kube_pod_container_resource_requests{resource=\"cpu\",namespace=\"default\",pod=~\"aegis-.*\"}) by (pod)", "legendFormat": "{{pod}} CPU Request"},
+          {"expr": "sum(kube_pod_container_resource_limits{resource=\"cpu\",namespace=\"default\",pod=~\"aegis-.*\"}) by (pod)", "legendFormat": "{{pod}} CPU Limit"},
+          {"expr": "sum(kube_pod_container_resource_requests{resource=\"memory\",namespace=\"default\",pod=~\"aegis-.*\"}) by (pod) / 1024 / 1024", "legendFormat": "{{pod}} Mem Request (MiB)"},
+          {"expr": "sum(kube_pod_container_resource_limits{resource=\"memory\",namespace=\"default\",pod=~\"aegis-.*\"}) by (pod) / 1024 / 1024", "legendFormat": "{{pod}} Mem Limit (MiB)"}
+        ]
+      },
+      {
+        "id": 15,
+        "title": "API Server Latency (p50, p95, p99)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 44, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "histogram_quantile(0.50, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le, verb, resource))", "legendFormat": "p50 {{verb}} {{resource}}"},
+          {"expr": "histogram_quantile(0.95, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le, verb, resource))", "legendFormat": "p95 {{verb}} {{resource}}"},
+          {"expr": "histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le, verb, resource))", "legendFormat": "p99 {{verb}} {{resource}}"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "s"}}
+      }
+    ]
+  }
+}

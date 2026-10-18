@@ -1,0 +1,15 @@
+[package]
+name = "aegis-behavioral"
+version = "0.1.0"
+edition = "2021"
+description = "Behavioral fingerprinting: SSH, LLM refusal-vector, Website Fingerprinting, JA4 Bot Score (§6.4)"
+license = "MIT"
+publish = false
+
+[dependencies]
+thiserror = "2"
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+hex-literal = "0.4"

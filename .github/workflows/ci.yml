@@ -1,0 +1,392 @@
+name: AEGIS CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ─── RUST WORKSPACES ──────────────────────────────────────────────
+  cargo-build:
+    name: Build (Rust Workspaces)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        workspace:
+          - packet-engine
+          - enrichment
+          - gateway
+          - targeting/ipv6
+          - targeting/vistascan
+          - infra/synthetic-generator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libbpf-dev clang llvm
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.workspace }}-${{ hashFiles(format('{0}/**/Cargo.lock', matrix.workspace)) }}
+      - name: Build workspace
+        run: cargo build --workspace --all-targets
+        working-directory: ${{ matrix.workspace }}
+
+  cargo-test:
+    name: Test (Rust Workspaces)
+    runs-on: ubuntu-latest
+    needs: cargo-build
+    strategy:
+      matrix:
+        workspace:
+          - packet-engine
+          - enrichment
+          - gateway
+          - targeting/ipv6
+          - targeting/vistascan
+          - infra/synthetic-generator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.workspace }}-${{ hashFiles(format('{0}/**/Cargo.lock', matrix.workspace)) }}
+      - name: Run tests
+        run: cargo test --workspace
+        working-directory: ${{ matrix.workspace }}
+
+  cargo-clippy:
+    name: Clippy Lint (Rust)
+    runs-on: ubuntu-latest
+    needs: cargo-build
+    strategy:
+      matrix:
+        workspace:
+          - packet-engine
+          - enrichment
+          - gateway
+          - targeting/ipv6
+          - targeting/vistascan
+          - infra/synthetic-generator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libbpf-dev clang llvm
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: ${{ matrix.workspace }}
+
+  cargo-fmt:
+    name: Format Check (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: |
+          for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do
+            echo "Checking fmt in $d..."
+            (cd "$d" && cargo fmt --check)
+          done
+
+  cargo-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      - name: Audit all workspaces
+        run: |
+          for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do
+            echo "Auditing $d..."
+            (cd "$d" && cargo audit)
+          done
+
+  cargo-fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    needs: cargo-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      - name: Fuzz JA4 parser
+        run: |
+          cd packet-engine/fuzz
+          cargo fuzz run fuzz_ja4 -- -max_total_time=60 || true
+        continue-on-error: true
+      - name: Fuzz TLS record parser
+        run: |
+          cd packet-engine/interrogation/tls
+          cargo fuzz run fuzz_tls_record -- -max_total_time=60 || true
+        continue-on-error: true
+      - name: Fuzz MCP/A2A
+        run: |
+          cd packet-engine/fuzz
+          cargo fuzz run fuzz_mcp_initialize -- -max_total_time=30 || true
+          cargo fuzz run fuzz_a2a_agent_card -- -max_total_time=30 || true
+        continue-on-error: true
+
+  kani-proofs:
+    name: Kani Formal Verification
+    runs-on: ubuntu-latest
+    needs: cargo-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Kani
+        run: cargo install --locked kani-verifier
+      - name: Run Kani proofs
+        run: |
+          cd packet-engine/proofs
+          cargo kani --harness siphash_collision_bound
+          cargo kani --harness permutation_bijection
+          cargo kani --harness siphash_functional
+
+  # ─── JAVA FLINK JOB ──────────────────────────────────────────────
+  flink-build:
+    name: Build (Flink Job)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build Flink job
+        run: ./gradlew shadowJar
+        working-directory: infra/flink-job
+
+  flink-test:
+    name: Test (Flink Job)
+    runs-on: ubuntu-latest
+    needs: flink-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run tests
+        run: ./gradlew test
+        working-directory: infra/flink-job
+
+  flink-checkstyle:
+    name: Checkstyle (Flink Job)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Checkstyle
+        run: ./gradlew checkstyleMain
+        working-directory: infra/flink-job
+
+  # ─── PYTHON ML ───────────────────────────────────────────────────
+  python-lint:
+    name: Lint (Python ML)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install dependencies
+        run: |
+          cd targeting/ml
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+          pip install ruff
+      - name: Ruff check
+        run: |
+          cd targeting/ml
+          source .venv/bin/activate
+          ruff check .
+      - name: Ruff format check
+        run: |
+          cd targeting/ml
+          source .venv/bin/activate
+          ruff format --check .
+
+  python-test:
+    name: Test (Python ML)
+    runs-on: ubuntu-latest
+    needs: python-lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install dependencies
+        run: |
+          cd targeting/ml
+          source .venv/bin/activate
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+      - name: Run tests
+        run: |
+          cd targeting/ml
+          source .venv/bin/activate
+          pytest -v --cov=targeting/ml --cov-report=xml
+
+  # ─── DASHBOARD ───────────────────────────────────────────────────
+  dashboard-build:
+    name: Build (Dashboard)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: dashboard
+      - name: Build
+        run: npm run build
+        working-directory: dashboard
+
+  dashboard-lint:
+    name: Lint (Dashboard)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: dashboard
+      - name: Lint
+        run: npm run lint
+        working-directory: dashboard
+
+  dashboard-test:
+    name: Test (Dashboard)
+    runs-on: ubuntu-latest
+    needs: dashboard-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: dashboard
+      - name: Test
+        run: npm test
+        working-directory: dashboard
+
+  # ─── DASHBOARD DEPLOY PREVIEW ────────────────────────────────────
+  dashboard-deploy-preview:
+    name: Deploy Preview (Dashboard)
+    runs-on: ubuntu-latest
+    needs: [dashboard-build, dashboard-lint, dashboard-test]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Deploy to Netlify Preview
+        run: echo "Deploy preview would go here (configure Netlify/Vercel)"
+        working-directory: dashboard
+
+  # ─── DOCKER BUILD ────────────────────────────────────────────────
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [cargo-build, cargo-test, cargo-clippy, cargo-fmt, flink-build, flink-test, python-lint, python-test, dashboard-build, dashboard-lint, dashboard-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+      - name: Build and push Gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: gateway
+          push: true
+          tags: ghcr.io/${{ github.repository }}/aegis-gateway:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build and push Dashboard
+        uses: docker/build-push-action@v5
+        with:
+          context: dashboard
+          push: true
+          tags: ghcr.io/${{ github.repository }}/aegis-dashboard:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build and push Synthetic Generator
+        uses: docker/build-push-action@v5
+        with:
+          context: infra/synthetic-generator
+          push: true
+          tags: ghcr.io/${{ github.repository }}/aegis-synthetic-generator:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─── RELEASE ─────────────────────────────────────────────────────
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          files: |
+            gateway/openapi.yaml
+            AEGIS_Master_Document.md
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

@@ -1,0 +1,47 @@
+[package]
+name = "aegis-sequence-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = { version = "0.4", features = ["link_libfuzzer"] }
+
+[dependencies.aegis-sequence]
+path = ".."
+
+[dependencies.aegis-traversal]
+path = "../../traversal"
+
+[[bin]]
+name = "siphash_fuzz"
+path = "fuzz_targets/siphash_fuzz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "siphash_key_fuzz"
+path = "fuzz_targets/siphash_key_fuzz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "siphash_ipv4_fuzz"
+path = "fuzz_targets/siphash_ipv4_fuzz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pipeline_fuzz"
+path = "fuzz_targets/pipeline_fuzz.rs"
+test = false
+doc = false
+bench = false

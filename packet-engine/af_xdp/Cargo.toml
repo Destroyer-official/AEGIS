@@ -1,0 +1,44 @@
+[package]
+name = "aegis-af-xdp"
+version = "0.1.0"
+edition = "2021"
+description = "AF_XDP zero-copy packet engine for AEGIS scanning platform"
+license = "MIT"
+publish = false
+
+[dependencies]
+libc = "0.2"
+nix = { version = "0.29", features = ["socket", "net", "poll", "mman", "ioctl"] }
+thiserror = "2"
+env_logger = "0.11"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+aegis-sequence = { path = "../sequence" }
+aegis-traversal = { path = "../traversal" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libbpf-sys = "1.5"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+reqwest = { version = "0.11", features = ["blocking"] }
+serde_json = "1"
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+rdkafka = { version = "0.34", features = ["default"] }
+
+[[bin]]
+name = "aegis-af-xdp"
+path = "src/main.rs"
+
+[[bench]]
+name = "throughput"
+harness = false
+
+[[bench]]
+name = "af_xdp_benchmark"
+harness = false
+
+[[bench]]
+name = "scale_test"
+harness = false

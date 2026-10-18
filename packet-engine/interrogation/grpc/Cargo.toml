@@ -1,0 +1,13 @@
+[package]
+name = "aegis-grpc"
+version = "0.1.0"
+edition = "2021"
+description = "gRPC / HTTP/2 ALPN negotiation and connection preface for AEGIS Phase 2 interrogation (§6.3)"
+license = "MIT"
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+hex-literal = "0.4"
+aegis-tls = { path = "../tls" }

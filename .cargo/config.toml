@@ -1,0 +1,26 @@
+# Cargo configuration for AEGIS
+# Sets protoc path for protobuf compilation
+
+[build]
+# Use protoc from system PATH or override with env var
+# PROTOC can be set in shell: export PROTOC=/usr/bin/protoc
+
+[env]
+# protoc is required by build scripts that run prost-build / tonic-build
+# (e.g. gateway). Override with an environment variable, or set the path
+# for your machine here. CI sets PROTOC after installing protoc.
+PROTOC = "C:\\Users\\shant\\protoc\\bin\\protoc.exe"
+
+[target."cfg(windows)"]
+# Windows-specific settings
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Profile overrides for faster builds during development
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

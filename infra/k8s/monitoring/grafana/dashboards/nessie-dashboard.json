@@ -1,0 +1,147 @@
+{
+  "dashboard": {
+    "title": "AEGIS Nessie Catalog",
+    "uid": "aegis-nessie",
+    "tags": ["aegis", "nessie", "iceberg", "catalog"],
+    "timezone": "utc",
+    "refresh": "10s",
+    "time": {"from": "now-1h", "to": "now"},
+    "panels": [
+      {
+        "id": 1,
+        "title": "Nessie Up",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [{"expr": "up{job=\"nessie\"}", "legendFormat": "Nessie"}],
+        "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}
+      },
+      {
+        "id": 2,
+        "title": "API Request Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 6, "y": 0, "w": 18, "h": 8},
+        "targets": [{"expr": "rate(nessie_api_requests_total[1m])", "legendFormat": "{{method}} {{path}}"}],
+        "fieldConfig": {"defaults": {"unit": "ops"}}
+      },
+      {
+        "id": 3,
+        "title": "API Latency (p50, p95, p99)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "histogram_quantile(0.50, sum(rate(nessie_api_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50"},
+          {"expr": "histogram_quantile(0.95, sum(rate(nessie_api_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"},
+          {"expr": "histogram_quantile(0.99, sum(rate(nessie_api_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "s"}}
+      },
+      {
+        "id": 4,
+        "title": "API Errors (5xx)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [{"expr": "rate(nessie_api_requests_total{status=~\"5..\"}[1m])", "legendFormat": "{{method}}"}],
+        "fieldConfig": {"defaults": {"unit": "ops", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 0.1}]}}}
+      },
+      {
+        "id": 5,
+        "title": "Total Commits",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 16, "w": 6, "h": 4},
+        "targets": [{"expr": "nessie_commits_total", "legendFormat": "Commits"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 6,
+        "title": "Active Branches",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 16, "w": 6, "h": 4},
+        "targets": [{"expr": "nessie_branches_total", "legendFormat": "Branches"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 7,
+        "title": "Tags",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 16, "w": 6, "h": 4},
+        "targets": [{"expr": "nessie_tags_total", "legendFormat": "Tags"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 8,
+        "title": "Tables in Catalog",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 16, "w": 6, "h": 4},
+        "targets": [{"expr": "nessie_tables_total", "legendFormat": "Tables"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 9,
+        "title": "Commits Over Time",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+        "targets": [{"expr": "rate(nessie_commits_total[5m])", "legendFormat": "Commits/sec"}],
+        "fieldConfig": {"defaults": {"unit": "ops"}}
+      },
+      {
+        "id": 10,
+        "title": "Branch Operations",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "rate(nessie_branch_created_total[5m])", "legendFormat": "Created"},
+          {"expr": "rate(nessie_branch_deleted_total[5m])", "legendFormat": "Deleted"},
+          {"expr": "rate(nessie_branch_assigned_total[5m])", "legendFormat": "Assigned"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "ops"}}
+      },
+      {
+        "id": 11,
+        "title": "Table Operations",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "rate(nessie_table_created_total[5m])", "legendFormat": "Created"},
+          {"expr": "rate(nessie_table_deleted_total[5m])", "legendFormat": "Deleted"},
+          {"expr": "rate(nessie_table_updated_total[5m])", "legendFormat": "Updated"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "ops"}}
+      },
+      {
+        "id": 12,
+        "title": "GC Operations",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+        "targets": [
+          {"expr": "rate(nessie_gc_commits_expired_total[5m])", "legendFormat": "Commits Expired"},
+          {"expr": "rate(nessie_gc_unreferenced_commits_total[5m])", "legendFormat": "Unreferenced"}
+        ],
+        "fieldConfig": {"defaults": {"unit": "ops"}}
+      },
+      {
+        "id": 13,
+        "title": "Reference Log Size",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 36, "w": 12, "h": 8},
+        "targets": [{"expr": "nessie_ref_log_size", "legendFormat": "{{ref}}"}],
+        "fieldConfig": {"defaults": {"unit": "short"}}
+      },
+      {
+        "id": 14,
+        "title": "Auth Failures",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 36, "w": 12, "h": 8},
+        "targets": [{"expr": "rate(nessie_auth_failures_total[5m])", "legendFormat": "{{method}}"}],
+        "fieldConfig": {"defaults": {"unit": "ops", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}}
+      },
+      {
+        "id": 15,
+        "title": "Iceberg REST API Calls",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 44, "w": 24, "h": 8},
+        "targets": [{"expr": "rate(nessie_iceberg_rest_requests_total[1m])", "legendFormat": "{{method}} {{path}}"}],
+        "fieldConfig": {"defaults": {"unit": "ops"}}
+      }
+    ]
+  }
+}

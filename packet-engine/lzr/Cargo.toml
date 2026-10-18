@@ -1,0 +1,37 @@
+[package]
+name = "aegis-lzr"
+version = "0.1.0"
+edition = "2021"
+description = "LZR protocol-agnostic reclassification heuristic for AEGIS stream processing (§6.2) — Aho-Corasick multi-pattern engine"
+license = "MIT"
+publish = false
+
+[dependencies]
+aho-corasick = "1"
+regex = "1"
+csv = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bincode = "1"
+thiserror = "2"
+tonic = "0.12"
+prost = "0.13"
+aegis-proto = { path = "../proto" }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+aegis-tls = { path = "../interrogation/tls" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tempfile = "3"
+
+[[bin]]
+name = "lzr"
+path = "src/bin/lzr.rs"
+
+[[bench]]
+name = "lzr_bench"
+harness = false
+
+[[bench]]
+name = "cross_crate_bench"
+harness = false

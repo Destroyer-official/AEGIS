@@ -1,0 +1,28 @@
+# AEGIS ALPN Policy Configuration
+# Per-port ALPN allow/deny lists with JA4+ fingerprint mapping
+
+[policies.default]
+action = "allow"
+alpn_list = ["h2", "grpc", "http/1.1"]
+
+[policies.port_8080]
+action = "allow"
+alpn_list = ["h2", "http/1.1"]
+
+[policies.port_8443]
+action = "allow"
+alpn_list = ["h2", "grpc"]
+
+[policies.port_9443]
+action = "deny"
+alpn_list = ["grpc"]
+
+[policies.ja4_known_browser]
+ja4_prefix = "t13d1516h2"
+action = "allow"
+alpn_list = ["h2", "http/1.1"]
+
+[policies.ja4_known_grpc]
+ja4_prefix = "t13d1516g2"
+action = "allow"
+alpn_list = ["grpc"]

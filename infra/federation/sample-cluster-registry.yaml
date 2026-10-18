@@ -1,0 +1,35 @@
+apiVersion: aegis.io/v1alpha1
+kind: ClusterRegistry
+metadata:
+  name: aegis-clusters
+spec:
+  clusters:
+    - name: aegis-primary
+      endpoint: https://kubernetes.default.svc
+      region: us-east-1
+      isPrimary: true
+      kubeconfigSecret: aegis-primary-kubeconfig
+      labels:
+        environment: production
+        tier: primary
+      capabilities:
+        - high-memory
+    - name: aegis-secondary
+      endpoint: https://kubernetes.default.svc
+      region: us-east-2
+      isPrimary: false
+      kubeconfigSecret: aegis-secondary-kubeconfig
+      labels:
+        environment: production
+        tier: secondary
+      capabilities:
+        - spot
+  scanScheduling:
+    strategy: closest
+    targetProximity:
+      enabled: true
+      maxLatencyMs: 100
+  trinoFederation:
+    enabled: true
+    catalogName: aegis-federated
+    syncInterval: "300"

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-coordinator
+  labels:
+    app: {{ .Release.Name }}
+    component: coordinator
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: {{ .Release.Name }}
+    component: coordinator

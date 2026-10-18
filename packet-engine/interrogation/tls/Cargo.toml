@@ -1,0 +1,16 @@
+[package]
+name = "aegis-tls"
+version = "0.1.0"
+edition = "2021"
+description = "Zero-copy TLS Client Hello / Server Hello parser and JA4+ fingerprint suite for AEGIS Phase 2 interrogation (§6.1)"
+license = "MIT"
+publish = false
+
+[dependencies]
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+hex-literal = "0.4"
+aegis-grpc = { path = "../grpc" }
+aegis-quic = { path = "../quic" }
