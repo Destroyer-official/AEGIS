@@ -289,55 +289,7 @@ cd infra
 ./scripts/verify.sh
 ```
 
----
 
-## 💾 Disk Space Management & Moving to Another PC
-
-### Why does the local folder take 40–50 GB?
-AEGIS is built with Rust and Gradle. The large size is **not source code** (the repository source code is ~20 MB). When you build or test, the Rust compiler creates `target/` directories containing:
-- Precompiled dependencies for ~25 crates across 6 workspaces.
-- Debug symbols and incremental compilation caches.
-- Native build artifacts and Gradle temporary caches.
-
-### How to reclaim ~46 GB of disk space in seconds:
-You do **not** need to delete your repository to recover disk space! Simply clean the build caches:
-```bash
-# In Bash:
-for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do
-  (cd "$d" && cargo clean)
-done
-(cd infra/flink-job && ./gradlew clean)
-
-# In Windows PowerShell:
-Set-Location packet-engine; cargo clean; Set-Location ../enrichment; cargo clean; Set-Location ../gateway; cargo clean; Set-Location ../targeting/ipv6; cargo clean; Set-Location ../targeting/vistascan; cargo clean; Set-Location ../infra/synthetic-generator; cargo clean; Set-Location ../infra/flink-job; ./gradlew clean; Set-Location ../..
-```
-This instantly frees ~46 GB and shrinks the local folder back to pure source files.
-
-### Can I delete the folder and continue on another PC?
-**Yes, 100%!** Everything required to build, test, and deploy AEGIS is committed to the GitHub repository:
-- All Rust, Java, Python, and TypeScript source files.
-- The standard `gradle-wrapper.jar` for instant Gradle bootstrapping on any OS.
-- Helm charts, Dockerfiles, and CI workflow configurations.
-
-#### Steps to continue on another PC:
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Destroyer-official/AEGIS.git
-   cd AEGIS
-   ```
-2. **Install system prerequisites on the new machine:**
-   - **Rust**: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-   - **Protobuf Compiler (`protoc`)**:
-     - *Linux*: `sudo apt install protobuf-compiler`
-     - *macOS*: `brew install protobuf`
-     - *Windows*: `scoop install protobuf` or download from GitHub and add to `PATH`
-   - **Node.js**: v20+ or v26 (with npm)
-   - **Python**: 3.10+ (with venv)
-   - **Java**: OpenJDK 21 (for Flink streaming jobs)
-3. **Verify everything builds cleanly:**
-   ```bash
-   cd packet-engine && cargo test --workspace
-   ```
 
 ---
 

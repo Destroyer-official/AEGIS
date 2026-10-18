@@ -259,17 +259,12 @@ cd infra/flink-job
 ./gradlew test
 ```
 
-### 5.8 Disk Space Management (Clean Build Caches)
-
-Rust and Gradle store compilation artifacts locally that can grow to ~46 GB. To reclaim this disk space without affecting git:
+### 5.8 Clean Build Artifacts
 
 ```bash
-# Clean Rust workspaces
 for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do
   (cd "$d" && cargo clean)
 done
-
-# Clean Gradle build caches
 (cd infra/flink-job && ./gradlew clean)
 ```
 
