@@ -178,6 +178,16 @@ cd infra/flink-job
 
 ## 5. Testing
 
+### 5.0 Automated End-to-End Live System Test
+
+Execute the full live system integration test against real TCP sockets and REST routes:
+
+```bash
+python scripts/e2e_live_test.py
+```
+
+This automated suite starts the real Gateway binary, exercises live HTTP requests, tests Argon2id credential verification, verifies privilege boundaries (Admin vs. Analyst vs. Viewer), creates CSPRNG API keys, blocks SQL injection and statement-chaining attacks via query grammar inspection, and verifies the Ed25519 cryptographic hash-chain audit log.
+
 ### 5.1 Rust Unit/Integration Tests
 
 ```bash

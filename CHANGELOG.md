@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2026-10-19
+
+### Security & Hardening
+- **Argon2id Authentication & RBAC**: Implemented salted **Argon2id** password hashing (`argon2 = "0.5"`) with constant-time verification against server-side user accounts, eliminating client-side role derivation.
+- **Zero-Trust JWT Model**: Enforced strict fail-closed validation for `JWT_SECRET` in production ($\ge 32$ characters required).
+- **SQL Injection Defense**: Built lexical grammar inspection engine stripping string literals, blocking statement chaining (unquoted semicolons), rejecting DDL/DML mutations, and enforcing result caps.
+- **Cryptographic Audit Log**: Implemented monotonic 64-bit sequence numbering, previous-hash linkage (`prev_entry_hash`), canonical JSON SHA-256 payload hashing, and Ed25519 digital signatures (`verify_log()` detects deletion, reordering, and tampering).
+- **CSPRNG API Keys**: 32-byte CSPRNG secrets (`rand::rngs::OsRng`), SHA-256 verifiers (purged MD5), single-use plaintext response, and scope/expiration validation.
+- **Identity Propagation**: Preserved caller principal and tenant context across REST, WebSocket, and gRPC streaming queries.
+- **Bounded Rate Limiting**: Capped limiter map to 10,000 entries with automatic LRU pruning and immediate non-blocking 429 Too Many Requests response.
+- **Fail-Closed ML Exporter**: Exporter raises `FileNotFoundError` if model checkpoints are missing, preventing untrained models in production.
+- **Live E2E Verification**: Created `scripts/e2e_live_test.py` running 12 live integration assertions across real TCP/HTTP network sockets.
+- **Dashboard & CI Gates**: Added Vitest test suite (`npm test`), added `master` branch to GitHub Actions CI triggers, and removed failure suppression in fuzzing steps.
+
+---
+
 ## [1.0.1] - 2026-10-18
 
 ### Fixed

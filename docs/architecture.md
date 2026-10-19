@@ -96,18 +96,23 @@ AEGIS is an intelligence-driven, continuous internet-wide scanning platform. It 
 
 ### 2.3 Gateway (`gateway/`)
 - **Framework**: Axum 0.7 + Tokio
-- **Auth**: JWT (HS256), Claims (sub, role, tenant_id, exp, iat)
-- **RBAC**: Viewer / Analyst / Admin + `manage_users` permission
+- **Authentication**: Salted **Argon2id** password verification against server-side user store; constant-time hash verification
+- **Zero-Trust Token Model**: JWT (HS256) with fail-closed production validation (minimum 32-character secret mandatory)
+- **RBAC**: Server-managed roles (`Admin`, `Analyst`, `Viewer`) strictly bound to accounts; client-derived roles rejected
+- **SQL Security Boundary**: Lexical grammar filter stripping string literals, blocking statement chaining (unquoted semicolons), rejecting DDL/DML mutations (`DROP`, `ALTER`, `TRUNCATE`, `INSERT`, etc.), and enforcing 1,000-row result caps
+- **Cryptographic Audit Log**: Monotonic 64-bit sequence numbering, previous-hash chaining (`prev_entry_hash`), canonical JSON SHA-256 payload hashing, and Ed25519 digital signatures (`verify_log()` detects deletion, reordering, and tampering)
+- **API-Key Lifecycle**: 32-byte CSPRNG secrets (`rand::rngs::OsRng`), SHA-256 stored verifiers, single-use plaintext response, and scope/expiration enforcement
+- **Bounded Rate Limiter**: Token-bucket limiter capped at 10,000 entries with automatic LRU pruning; non-blocking immediate `429 Too Many Requests`
+- **Identity Propagation**: Authenticated caller principal propagates across REST, WebSocket, and gRPC execution
 - **Endpoints**:
   - `GET /health` — health check
-  - `POST /auth/login` — JWT issuance
+  - `POST /auth/login` — Argon2id authentication & JWT issuance
   - `POST /query` — Trino SQL (analyst+)
   - `GET /rate-limit/status` — token bucket status
   - `POST /admin/action` — audit export/verify/key
   - `POST /admin/users` — tenant CRUD, API keys
   - `GET /ws/query` / `/ws/stream` — WebSocket streaming
-- **Middleware**: tracing (OpenTelemetry), authz, rate-limit, audit, tenant isolation
-- **gRPC**: Trino query proxy (`GrpcQueryService`)
+- **gRPC**: Protected query service (`GrpcQueryService`) with bearer token validation
 
 ---
 
@@ -219,13 +224,16 @@ API GATEWAY (REST/WS/gRPC) → DASHBOARD
 
 ## 7. Security Boundaries
 
-| Boundary | Control |
-|----------|---------|
-| **Network** | PoPs in dedicated VPCs, no public ingress |
-| **Auth** | JWT + mTLS for gRPC, RBAC on all endpoints |
-| **Data** | MinIO encryption at rest, TLS in transit |
-| **Secrets** | External vault (not in repo), env vars only |
-| **Audit** | Signed append-only log, immutable |
+| Boundary | Control | Implementation |
+|----------|---------|----------------|
+| **Network** | PoPs in dedicated VPCs, no public ingress | Linux kernel AF_XDP / eBPF |
+| **Auth & Identity** | Salted Argon2id + JWT + verified RBAC | Server-side user store, constant-time verification |
+| **Data Plane / SQL** | AST lexical grammar filter | Read-only enforcement, unquoted semicolon blocking |
+| **API Keys** | 32-byte CSPRNG one-time secret | SHA-256 verifier, scope & expiry enforcement |
+| **Audit Trail** | Tamper-evident cryptographic hash chain | Monotonic seq, `prev_entry_hash`, Ed25519 signatures |
+| **Rate Limiting** | Bounded token-bucket per user/IP | 10k capacity, LRU pruning, non-blocking 429 |
+| **Secrets** | Fail-closed external provisioning | ≥ 32-char mandatory JWT secret in production |
+| **ML Inference** | Checkpoint provenance validation | Fail-closed (`FileNotFoundError`) on missing weights |
 
 ---
 
