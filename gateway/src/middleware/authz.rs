@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Extension, Request},
+    extract::{Request, State},
     http::StatusCode,
     middleware::Next,
     response::Response,
@@ -24,7 +24,7 @@ impl AuthzConfig {
 }
 
 pub async fn authz_middleware(
-    Extension(config): Extension<AuthzConfig>,
+    State(config): State<AuthzConfig>,
     mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {

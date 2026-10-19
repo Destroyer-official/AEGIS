@@ -68,6 +68,9 @@ impl AuditLog {
     pub fn new(log_dir: &str) -> Self {
         let log_path = PathBuf::from(log_dir).join("audit.log");
         fs::create_dir_all(log_dir).expect("Failed to create audit log directory");
+        if !log_path.exists() {
+            let _ = fs::File::create(&log_path);
+        }
 
         let signing_key = Self::load_or_generate_key(log_dir);
         let verifying_key = signing_key.verifying_key();
@@ -221,6 +224,10 @@ impl AuditLog {
     /// 3. Canonical payload SHA-256 match (guards against field tampering)
     /// 4. Ed25519 signature on entry hash (guards against unauthorized forging)
     pub async fn verify_log(&self) -> Result<Vec<AuditEntry>, Vec<String>> {
+        if !self.log_path.exists() {
+            return Ok(Vec::new());
+        }
+
         let file = match fs::File::open(&self.log_path) {
             Ok(f) => f,
             Err(e) => return Err(vec![format!("Failed to open log: {}", e)]),

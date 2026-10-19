@@ -80,6 +80,14 @@ Content-Type: application/json
 }
 ```
 
+> [!NOTE]
+> **Query Security Policy:**
+> Queries pass through a lexical grammar inspection engine before execution:
+> 1. Statements must begin with a read-only verb (`SELECT`, `WITH`, `SHOW`, `DESCRIBE`, `EXPLAIN`).
+> 2. Statement chaining via unquoted semicolons is strictly prohibited (`400 Bad Request`).
+> 3. Mutation and DDL operations (`DROP`, `ALTER`, `TRUNCATE`, `INSERT`, `UPDATE`, `DELETE`, `GRANT`, `REVOKE`, etc.) are unconditionally rejected.
+> 4. Default query row limits are capped at 1,000 to prevent coordinator memory exhaustion.
+
 **Response (200):**
 ```json
 {
@@ -218,6 +226,34 @@ Content-Type: application/json
 ```
 
 **Actions:** `list`, `create`, `update`, `delete`, `quota`, `apikey_create`, `apikey_list`, `apikey_revoke`
+
+#### 5.2.1 API Key Creation (CSPRNG One-Time Secret)
+```http
+POST /admin/users
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "action": "apikey_create",
+  "id": "tenant-new",
+  "name": "ci-scanner-bot"
+}
+```
+
+**Response (200):**
+```json
+{
+  "id": "a98f12cb-...",
+  "tenant_id": "tenant-new",
+  "name": "ci-scanner-bot",
+  "raw_key": "aegis_tenant-new_68d939bc1b0cd99f7c2164a0964bcee36713b48cf2a3b876c3698e14905ea25e",
+  "scopes": ["read"],
+  "created_at": "2026-10-19T09:00:00Z",
+  "expires_at": "2027-10-19T09:00:00Z"
+}
+```
+> [!IMPORTANT]
+> The plaintext `raw_key` is generated via CSPRNG (`rand::rngs::OsRng`) and returned **only once** upon creation. The AEGIS server strictly stores only its SHA-256 cryptographic verifier. Subsequent key listing requests return metadata only.
 
 ---
 

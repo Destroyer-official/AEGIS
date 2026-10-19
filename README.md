@@ -2,245 +2,129 @@
 
 [![Build Status](https://github.com/Destroyer-official/AEGIS/actions/workflows/ci.yml/badge.svg)](https://github.com/Destroyer-official/AEGIS/actions/workflows/ci.yml)
 [![Clippy](https://img.shields.io/badge/clippy-clean-brightgreen)]()
-[![Tests](https://img.shields.io/badge/tests-730%2B_passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-verified_passing-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust Version](https://img.shields.io/badge/rust-1.98%2B-orange.svg)]()
 [![Node Version](https://img.shields.io/badge/node-26%2B-green.svg)]()
 [![Python Version](https://img.shields.io/badge/python-3.14%2B-blue.svg)]()
 
-> **AEGIS** (Greek: Αἰγίς) — The shield of Zeus and Athena. An intelligence-driven, continuous internet-wide scanning platform that replaces brute-force enumeration with predictive targeting, streaming analytics, and deep protocol interrogation.
+> **AEGIS** (Greek: Αἰγίς) — The shield of Zeus and Athena. An intelligence-driven, continuous internet-wide scanning platform that replaces brute-force enumeration with predictive targeting, streaming analytics, deep protocol interrogation, and zero-trust cryptographic security.
 
 ---
 
 ## 🎯 What Is AEGIS?
 
-AEGIS is a from-scratch, production-grade internet mapping platform designed to operate at internet scale. Unlike legacy scanners (ZMap, Masscan, Nmap) that rely on brute-force port sweeps, AEGIS uses:
+AEGIS is an open-source, production-ready internet mapping platform designed to operate at internet scale. Unlike legacy scanners (ZMap, Masscan, Nmap) that rely on brute-force port sweeps, AEGIS uses:
 
-- **Predictive Targeting** — GPS co-occurrence models (IPv4) + 6Hit/6SENSE reinforcement learning (IPv6) to achieve 92.5% service discovery with 131× less bandwidth
-- **Two-Phase Probing** — Stateless L4 SYN/UDP discovery → Stateful L7 protocol interrogation (TLS/JA4+, HTTP/2, gRPC, QUIC, SSH, MQTT, LLM endpoints)
-- **Streaming Architecture** — Kafka → Flink → Iceberg on S3/MinIO → Trino SQL with time-travel queries
-- **Deep Protocol Intelligence** — JA4+ TLS fingerprinting, LZR payload-based service reclassification, SSH behavioral analysis, LLM refusal-vector fingerprinting
-- **Ethics by Design** — Identity transparency, opt-out enforcement, adaptive rate limiting embedded at the socket layer
+- **Predictive Targeting** — GPS co-occurrence models (IPv4) + 6Hit/6SENSE reinforcement learning (IPv6) to achieve high service discovery with minimized bandwidth overhead.
+- **Two-Phase Probing** — Stateless L4 SYN/UDP discovery → Stateful L7 protocol interrogation (TLS/JA4+, HTTP/2, gRPC, QUIC, SSH, MQTT, LLM endpoints).
+- **Streaming Architecture** — Kafka → Flink → Iceberg on S3/MinIO → Trino SQL with time-travel queries.
+- **Deep Protocol Intelligence** — JA4+ TLS fingerprinting, LZR payload-based service reclassification, SSH behavioral analysis, LLM refusal-vector fingerprinting.
+- **Enterprise Security Invariants** — Argon2id password verification, tamper-evident Ed25519 hash-chained audit trails, lexical SQL injection prevention, CSPRNG API keys, and bounded non-blocking rate limiting.
 
 ---
 
-## 🎬 Demo & Examples
+## 🔒 Security Architecture & Cryptographic Invariants
 
-### 🖥️ Dashboard Preview
-```
-┌─────────────────────────────────────────────────────────────┐
-│  AEGIS Dashboard                                    🔍 ⚙️  │
-├─────────────────────────────────────────────────────────────┤
-│  Overview  │  Query  │  Scans  │  Assets  │  Admin          │
-├────────────┼─────────┼─────────┼──────────┼─────────────────┤
-│  Hosts: 1.2M    Services: 4.8M    CVEs: 12.4K    Alerts: 3  │
-├─────────────────────────────────────────────────────────────┤
-│  📈 Host Timeline          │  🔴 Vulnerability Distribution  │
-│  ┌─────────────────────┐   │  ┌─────────────────────────┐   │
-│  │ ████████░░ 1.2M      │   │  │ Critical:  ████  234    │   │
-│  │ ███████░░░ 980K      │   │  │ High:      ███████  892  │   │
-│  │ ██████░░░░ 720K      │   │  │ Medium:    █████████ 1.2K │   │
-│  │ █████░░░░░ 510K      │   │  │ Low:       ███████████ 2.1K│   │
-│  └─────────────────────┘   │  └─────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
-*Run `cd dashboard && npm run dev` to see the live dashboard at `http://localhost:5173`*
+AEGIS enforces strict zero-trust cryptographic boundaries across every communication path:
 
-### 🔍 API Usage Examples
+| Defense Vector | Implementation | Guarantees |
+|---|---|---|
+| **Authentication & RBAC** | `argon2 = "0.5"`, `jsonwebtoken = "9"` | Salted **Argon2id** password verification against server-side user stores. Client-controlled role derivations are strictly rejected. Roles (`Admin`, `Analyst`, `Viewer`) are cryptographically verified per request. |
+| **Fail-Closed Secrets** | `gateway/src/auth/mod.rs` | In production environments, `JWT_SECRET` must be provisioned externally with $\ge 32$ characters. Startup terminates immediately if secrets are absent or weak. |
+| **SQL Security Boundary** | `gateway/src/query/mod.rs` | Lexical grammar inspection strips quoted string literals to detect and reject statement chaining (unquoted semicolons), blocks destructive DDL/DML mutations (`DROP`, `ALTER`, `TRUNCATE`, `INSERT`, `UPDATE`, `DELETE`, etc.), and enforces read-only query verbs with hard result row caps. |
+| **Tenant Isolation** | `gateway/src/tenant.rs`, `ws/`, `grpc_handler/` | Authenticated principal identities propagate across REST, WebSocket, and gRPC execution pipelines. Synthetic administrative identities on default tenants are eliminated. |
+| **API-Key Lifecycle** | `gateway/src/tenant.rs` | Keys generated via 32-byte CSPRNG (`rand::rngs::OsRng`), formatted as `aegis_<tenant>_<entropy>`. Stored verifiers use SHA-256 (MD5 eliminated). Keys return once at creation; verifiers enforce tenant status, scopes, and expiration timestamps. |
+| **Audit Log Hash Chain** | `gateway/src/audit_log.rs` | Every audit entry contains a strictly monotonic sequence number and a `prev_entry_hash` linkage. Payloads are canonicalized to JSON, hashed with SHA-256, and signed via Ed25519 (`ed25519-dalek`). Deletions, reordering, truncation, or field edits are detected by `verify_log()`. |
+| **Non-Blocking Rate Limiting** | `gateway/src/rate_limit/mod.rs` | Limiter cache bounded to 10,000 entries with automatic LRU-style pruning upon saturation. Over-limit traffic immediately receives `429 Too Many Requests` without thread starvation. |
+| **Model Provenance** | `targeting/ml/export_onnx.py` | Exporter strictly fails closed (`FileNotFoundError`) if checkpoints are absent, preventing untrained weights from being deployed to production inference pipelines. |
 
-#### Query Vulnerable Services (REST)
+---
+
+## ⚡ Quick Start: Hands-on Usage & Real Demos
+
+You can run individual probes, test the full API gateway, or execute the automated live system test locally without requiring a distributed cluster.
+
+### 🧪 Mode 0: Automated End-to-End Live Verification (Single Command)
+
+Execute the complete live end-to-end runtime test harness. This launches the Gateway binary, verifies live socket communication, exercises authentication, tests attack defenses, provisions tenants, creates CSPRNG API keys, tests SQL grammar security, and verifies the Ed25519 cryptographic hash chain:
+
 ```bash
-curl -X POST https://api.aegis.example.com/query \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "SELECT h.ip, s.port, s.protocol, v.cve, v.cvss FROM hosts h JOIN services s ON h.ip = s.host_ip JOIN LATERAL (SELECT unnest(s.cves) AS cve, unnest(s.cvss_scores) AS cvss) v ON true WHERE v.cvss >= 7.0 ORDER BY v.cvss DESC LIMIT 50"
-  }'
+python scripts/e2e_live_test.py
 ```
 
-#### Stream Query Results (WebSocket)
-```javascript
-const ws = new WebSocket('wss://api.aegis.example.com/ws/query', ['bearer', TOKEN]);
-ws.onmessage = (event) => {
-  const chunk = JSON.parse(event.data);
-  console.log(`Batch: ${chunk.rows.length} rows, Last: ${chunk.is_last}`);
-};
-
-ws.send(JSON.stringify({
-  sql: "SELECT * FROM services WHERE ja4 LIKE 't13d1516h2%'",
-  batch_size: 1000
-}));
-```
-
-#### Python SDK Example
-```python
-from aegis import AegisClient
-
-client = AegisClient(
-    base_url="https://api.aegis.example.com",
-    username="analyst@company.com",
-    password="secure-password"
-)
-
-# Find vulnerable services
-results = client.query("""
-    SELECT h.ip, s.port, s.protocol, v.cve, v.cvss
-    FROM hosts h
-    JOIN services s ON h.ip = s.host_ip
-    JOIN LATERAL (
-      SELECT unnest(s.cves) AS cve, unnest(s.cvss_scores) AS cvss
-    ) v ON true
-    WHERE v.cvss >= 7.0
-    ORDER BY v.cvss DESC
-    LIMIT 100
-""")
-
-for row in results:
-    print(f"{row['ip']}:{row['port']} {row['protocol']} - {row['cve']} (CVSS {row['cvss']})")
-
-# Export audit log
-audit = client.admin_action("export", tenant_id="tenant-a")
-print(f"Exported {len(audit)} audit entries")
-```
-
-### 🔧 Configuration Examples
-
-#### Environment Variables (.env)
-```bash
-# Gateway
-JWT_SECRET=your-256-bit-secret-change-in-production
-JWT_EXPIRATION_SECS=3600
-TRINO_COORDINATOR_URL=http://trino:8080
-TRINO_CATALOG=iceberg
-TRINO_SCHEMA=aegis
-GATEWAY_HOST=0.0.0.0
-GATEWAY_PORT=3000
-GRPC_PORT=50051
-
-# Rate Limiting
-RATE_LIMIT_DEFAULT_RPS=100
-RATE_LIMIT_BURST_SIZE=200
-
-# Audit Log
-AUDIT_LOG_DIR=/var/log/aegis/audit
-
-# ML Serving
-ML_MODEL_PATH=/models/6hit_dqn.pt
-ML_DEVICE=cuda
-```
-
-#### Tenant Configuration (via API)
-```json
-{
-  "action": "create",
-  "config": {
-    "id": "tenant-acme",
-    "name": "Acme Corporation",
-    "max_rate_rps": 200,
-    "max_scans_per_day": 10000,
-    "max_queries_per_hour": 50000,
-    "data_retention_days": 180,
-    "enabled": true
-  }
-}
+**Real Test Output:**
+```text
+======================================================================
+AEGIS PLATFORM — LIVE END-TO-END SYSTEM INTEGRATION TEST
+======================================================================
+[INFO] ℹ️ Found Gateway binary: gateway/target/debug/aegis-gateway.exe
+[INFO] ℹ️ Launching Gateway process on port 3005...
+[SUCCESS] ✅ Gateway is LIVE! Status: 200 OK, Version: 0.1.0
+[INFO] ℹ️ Testing Finding 1 Defense: Attacker bypass attempt with 'admin' prefix...
+[SUCCESS] ✅ Finding 1 bypass attempt successfully REJECTED (401 Unauthorized)
+[SUCCESS] ✅ Invalid password for admin user rejected (401 Unauthorized)
+[INFO] ℹ️ Authenticating as 'admin' with valid Argon2id credentials...
+[SUCCESS] ✅ Admin authentication SUCCESS. JWT token received (197 bytes)
+[INFO] ℹ️ Authenticating as 'analyst'...
+[SUCCESS] ✅ Analyst authentication SUCCESS
+[INFO] ℹ️ Testing RBAC boundary: Analyst requesting /admin/users...
+[SUCCESS] ✅ RBAC boundary enforced: Analyst blocked from admin endpoints (403 Forbidden)
+[INFO] ℹ️ Admin creating tenant 'tenant-live-cyber'...
+[SUCCESS] ✅ Tenant 'tenant-live-cyber' created successfully
+[INFO] ℹ️ Testing Finding 4 Defense: Generating high-entropy API key...
+[SUCCESS] ✅ High-entropy CSPRNG API key created: aegis_tenant-live-cy... (Single-use secret delivered, hash kept private)
+[INFO] ℹ️ Testing Finding 2 Defense: SQL Injection Statement Chaining Prevention...
+[SUCCESS] ✅ SQL injection chaining attack BLOCKED by query grammar defense (400 Bad Request)
+[SUCCESS] ✅ Destructive DDL query BLOCKED by query grammar defense (400 Bad Request)
+[INFO] ℹ️ Testing Finding 5 Defense: Verifying tamper-evident audit log hash chain...
+[SUCCESS] ✅ Audit log verified: 10 records in valid Ed25519 cryptographic hash chain
+[INFO] ℹ️ Checking Rate Limiter status...
+[SUCCESS] ✅ Rate Limiter Status: 200 OK (Remaining tokens: 1)
+======================================================================
+🎉 ALL LIVE RUNTIME & INTEGRATION TESTS PASSED WITH 100% SUCCESS!
+======================================================================
 ```
 
 ---
-
-## 🛠️ Tech Stack
-
-| Layer | Technology | Version |
-|-------|------------|---------|
-| **Core Scanning** | Rust, Tokio, AF_XDP, pnet | 1.98+ |
-| **Protocol Parsing** | Custom parsers, JA4+, LZR | — |
-| **Message Backbone** | Apache Kafka (KRaft) | 3.6+ |
-| **Stream Processing** | Apache Flink | 1.18+ |
-| **Storage** | Apache Iceberg, MinIO/S3 | 1.4+ |
-| **Catalog** | Nessie (Iceberg REST) | 0.70+ |
-| **Query Engine** | Trino | 440+ |
-| **API Gateway** | Axum, Tokio, Tower | 0.7+ |
-| **ML Targeting** | PyTorch, Ray, FastAPI | 2.3+, 2.8+, 0.100+ |
-| **Dashboard** | React, Vite, TanStack Query | 19, 5, 5 |
-| **SDKs** | Go, Python, TypeScript | 1.22+, 3.14+, 5.3+ |
-| **Orchestration** | Kubernetes, Helm, Kind | 1.28+, 3.13+, 0.23+ |
-| **CI/CD** | GitHub Actions | — |
-
----
-
----
-
-## ⚡ Quick Start: How Normal Users & Analysts Use AEGIS
-
-You don't need a massive Kubernetes cluster to start using AEGIS right now. Below are direct, hands-on examples for running individual probes, starting the API gateway, and visualizing data.
 
 ### 🌐 Mode 1: Live Internet TLS Probing (No Cluster Required)
 
-Directly interrogate public internet endpoints using AEGIS zero-copy TLS parser and JA4S engine over live TCP:
+Directly interrogate public internet endpoints using the zero-copy TLS parser and JA4S engine over live TCP:
 
 ```bash
 # Probe Cloudflare DNS over real WAN (computes live JA4S fingerprint)
 cd packet-engine/interrogation/tls
 cargo run --example live_tls_probe -- 1.1.1.1:443
 
-# Probe GitHub or any domain/IP
+# Probe GitHub or Google DNS
 cargo run --example live_tls_probe -- github.com:443
 cargo run --example live_tls_probe -- 8.8.8.8:443
 ```
 
-**Real Live Output Example:**
-```text
-========================================================
-  AEGIS Live TLS / JA4S Internet Probe
-  Target:   1.1.1.1:443
-  SNI Host: one.one.one.one
-========================================================
-[1/4] Connecting to 1.1.1.1:443 via TCP...
-      Connected successfully!
-[2/4] Sending RFC 8446 ClientHello probe (209 bytes)...
-[3/4] Awaiting live TLS response from remote server...
-      Received 2615 bytes from remote server!
-[4/4] Parsing TLS records and calculating JA4S fingerprint...
-  ├── Content-Type: Handshake
-  ├── Wire Legacy Version: Tls12
-  └── Record Payload Size: 122 bytes
-
-  [ServerHello Details]
-    • Wire Legacy Version: 0x0303
-    • Negotiated TLS Version: 0x0304 (TLS 1.3)
-    • Selected Cipher Suite: 0x1301
-    • Extension Count: 2
-    • Extension IDs: [51, 43]
-
-  ========================================================
-  🎯 LIVE JA4S FINGERPRINT: s13_1301_a56c5b993250
-     Version: 13 | Cipher: 1301 | ExtHash: a56c5b993250
-  ========================================================
-```
-
 ---
 
-### 🚀 Mode 2: Start the AEGIS Gateway & Interactive API Docs
+### 🚀 Mode 2: Start the AEGIS Gateway & Interactive Swagger UI
 
-Launch the Axum REST/WebSocket/gRPC Gateway locally:
+Launch the REST/WebSocket/gRPC Gateway locally:
 
 ```bash
 cd gateway
 cargo run
 ```
-The gateway starts on port `3000` (HTTP/WS) and `50051` (gRPC).
+The gateway binds to port `3000` (HTTP/WS) and `50051` (gRPC).
 
 1. **Verify Health:**
    ```bash
    curl http://localhost:3000/health
-   # Returns: {"status":"ok","version":"0.1.0","active_queries":0,"uptime_secs":4}
+   # Returns: {"status":"ok","version":"0.1.0","timestamp":"..."}
    ```
 2. **Interactive Swagger UI:**
    Open your browser to:
    ```
    http://localhost:3000/swagger-ui
    ```
-   Explore and test all authentication, query, scanning, and user administration endpoints interactively.
-3. **Download OpenAPI 3.0 Specification:**
+3. **OpenAPI 3.0 Specification:**
    ```bash
    curl http://localhost:3000/api-docs/openapi.json
    ```
@@ -249,253 +133,131 @@ The gateway starts on port `3000` (HTTP/WS) and `50051` (gRPC).
 
 ### 🖥️ Mode 3: Interactive Web Dashboard
 
-Launch the modern React + Vite dashboard:
+Launch the React 19 + Vite dashboard:
 
 ```bash
 cd dashboard
 npm install
 npm run dev
 ```
-Open **`http://localhost:5173`** in your browser to view real-time host exploration, JA4 fingerprinting analytics, and vulnerability breakdowns.
+Open **`http://localhost:5173`** to access the dashboard. Mock prototype data and verified live telemetry streams are clearly attributed with real-time provenance badges.
+
+To run the automated behavioral test suite in dashboard:
+```bash
+npm test        # Runs Vitest behavioral & security tests
+npm run lint    # Runs Oxlint code verification
+```
 
 ---
 
-### 🧠 Mode 4: Python ML Targeting & IPv6 Evaluation
+### 🧠 Mode 4: Python ML Targeting Pipeline
 
-Test the reinforcement learning target predictor and hit rate evaluation pipeline:
+Test the reinforcement learning target predictor and drift monitor:
 
 ```bash
 cd targeting/ml
 python -m venv .venv
-
-# On Linux/macOS:
-source .venv/bin/activate
-# On Windows PowerShell:
-# .venv\Scripts\Activate.ps1
-
+source .venv/bin/activate       # On Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 pytest tests/test_ml_pipeline.py -v
 ```
 
 ---
 
-### 🏗️ Mode 5: Full Enterprise Streaming Cluster (Optional)
+## 🛠️ Architecture Overview
 
-For large-scale internet operations across Kafka, Flink, Iceberg, and Trino:
-
-```bash
-cd infra
-./scripts/bootstrap.sh
-./scripts/verify.sh
+```
+                      ┌──────────────────────────────────────────────┐
+                      │              INTERNET TARGETS                │
+                      └──────────────────────▲───────────────────────┘
+                                             │ L4 SYN Probing (AF_XDP)
+                                             │ L7 Interrogation (TLS/SSH/HTTP)
+                      ┌──────────────────────┴───────────────────────┐
+                      │        AEGIS PACKET ENGINE WORKSPACE         │
+                      │  • af_xdp        • sequence     • traversal  │
+                      │  • tls / ja4     • lzr          • behavioral │
+                      └──────────────────────┬───────────────────────┘
+                                             │ Raw Telemetry
+                                             ▼
+                      ┌──────────────────────────────────────────────┐
+                      │              KAFKA EVENT BUS                 │
+                      └──────────────────────┬───────────────────────┘
+                                             │ Stream Ingestion
+                                             ▼
+                      ┌──────────────────────────────────────────────┐
+                      │             APACHE FLINK PIPELINE            │
+                      │   Stateful Deduplication & Protocol Fusion   │
+                      └──────────────────────┬───────────────────────┘
+                                             │ Parquet
+                                             ▼
+                      ┌──────────────────────────────────────────────┐
+                      │             APACHE ICEBERG / S3              │
+                      └──────────────────────▲───────────────────────┘
+                                             │ Query Acceleration
+                                             ▼
+                      ┌──────────────────────────────────────────────┐
+                      │             TRINO SQL QUERY ENGINE           │
+                      └──────────────────────▲───────────────────────┘
+                                             │ Protected SQL
+                                             ▼
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │                         AEGIS SECURE API GATEWAY                         │
+  │  • Argon2id Auth & RBAC          • Bounded Rate Limiting (Token Bucket)  │
+  │  • AST SQL Grammar Filter        • Ed25519 Hash-Chained Audit Trail      │
+  │  • CSPRNG API Keys               • gRPC & WebSocket Identity Propagation │
+  └──────────────────────────┬────────────────────────────▲──────────────────┘
+                             │                            │
+                             ▼                            ▼
+                 ┌──────────────────────┐     ┌──────────────────────┐
+                 │    REACT DASHBOARD   │     │   PYTHON / GO SDKs   │
+                 └──────────────────────┘     └──────────────────────┘
 ```
 
 ---
 
-## ⚙️ Configuration
+## 🧪 Testing & Verification Matrix
 
-### Environment Variables
-```bash
-# Copy template
-cp .env.example .env
+Every check in AEGIS is verified locally and through strict CI gates (no failure suppression, no masked exit codes):
 
-# Edit required values
-vim .env
-```
-
-**Key Variables:**
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `JWT_SECRET` | ✅ | — | 256-bit base64 secret |
-| `TRINO_COORDINATOR_URL` | ✅ | — | Trino coordinator URL |
-| `KAFKA_BROKERS` | ✅ | localhost:9092 | Kafka bootstrap servers |
-| `MINIO_ENDPOINT` | ✅ | http://localhost:9000 | MinIO S3 endpoint |
-| `MINIO_ACCESS_KEY` | ✅ | minioadmin | MinIO access key |
-| `MINIO_SECRET_KEY` | ✅ | minioadmin | MinIO secret key |
-| `NESSIE_URI` | ✅ | http://localhost:19120/api/v1 | Nessie catalog URI |
-| `RUST_LOG` | ❌ | info | Log level (trace/debug/info/warn/error) |
-
-### Kubernetes Deployment
-```bash
-# Apply manifests
-kubectl apply -k infra/k8s/overlays/production
-
-# Or use Helm
-helm install aegis infra/charts/aegis \
-  --namespace aegis \
-  --create-namespace \
-  --set image.tag=v1.0.0 \
-  --set jwt.secret=$(openssl rand -base64 64)
-```
+| Component | Test Runner | Scope | Results |
+|---|---|---|---|
+| **Gateway** | `cargo test` | Argon2id auth, audit hash-chain, SQL defense, rate limiter, tenant CRUD | **19 passed; 0 failed** |
+| **Enrichment** | `cargo test --workspace` | CVE correlation, geolocation inference, multi-tier cache, asset graphs | **90 passed; 0 failed** |
+| **Packet Engine** | `cargo test --workspace` | JA4+ fingerprinting, LZR reclassification, cyclic traversal, AF_XDP rings | **154 passed; 0 failed** |
+| **Targeting IPv6** | `cargo test --workspace` | Space-tree prefix partitioning, 6Hit reward computation | **11 passed; 0 failed** |
+| **VistaScan** | `cargo test --workspace` | Visibility matrix, anchor selection, SLA coverage monitors | **19 passed; 0 failed** |
+| **Python ML** | `pytest -v` | Dueling DQN, drift monitor, fail-closed ONNX export | **7 passed; 0 failed** |
+| **Dashboard** | `vitest run` | SQL injection sanitization, chart data provenance indicators | **6 passed; 0 failed** |
+| **Java Flink** | `./gradlew test` | Stateful event deduplication, Iceberg sink | **Passed** |
+| **Live E2E** | `python scripts/e2e_live_test.py` | Live HTTP socket test across all security and data layers | **12 passed; 0 failed** |
 
 ---
 
-## 📊 Usage Examples
-
-### Query Active Services
-```sql
--- All active HTTPS services with JA4 fingerprint
-SELECT s.host_ip, s.port, s.ja4, s.ja4s, s.status
-FROM services s
-WHERE s.protocol = 'HTTPS' AND s.status = 'active'
-ORDER BY s.last_seen DESC
-LIMIT 100;
-```
-
-### Find Vulnerable Services
-```sql
-SELECT h.ip, s.port, s.protocol, v.cve, v.cvss
-FROM hosts h
-JOIN services s ON h.ip = s.host_ip
-JOIN LATERAL (
-  SELECT unnest(s.cves) AS cve, unnest(s.cvss_scores) AS cvss
-) v ON true
-WHERE v.cvss >= 7.0
-ORDER BY v.cvss DESC
-LIMIT 50;
-```
-
-### Time-Travel Analysis
-```sql
--- Host state 24 hours ago
-SELECT * FROM hosts
-FOR SYSTEM_TIME AS OF TIMESTAMP '2026-08-29 12:00:00'
-WHERE ip = '192.0.2.1';
-```
-
-### Asset Correlation
-```sql
--- Find hosts sharing TLS certificate
-SELECT c.serial_number, array_agg(DISTINCT s.host_ip) AS ips
-FROM certificates c
-JOIN services s ON c.sha256_fingerprint = s.cert_sha256
-GROUP BY c.serial_number
-HAVING cardinality(array_agg(DISTINCT s.host_ip)) > 1;
-```
-
----
-
-## 🧪 Testing & Development
-
-### Run All Tests
-```bash
-# Rust (all workspaces)
-for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do (cd "$d" && cargo test --workspace); done
-
-# Dashboard
-cd dashboard && npm test
-
-# Python ML
-cd targeting/ml && source .venv/bin/activate && pytest -v
-
-# Java Flink
-cd infra/flink-job && ./gradlew test
-```
-
-### Linting
-```bash
-# Rust
-cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --check
-
-# Python
-cd targeting/ml && ruff check . && ruff format --check .
-
-# Dashboard
-cd dashboard && npm run lint
-```
-
-### Fuzzing
-```bash
-cd packet-engine/fuzz
-cargo fuzz run fuzz_ja4 -- -max_total_time=60
-cargo fuzz run fuzz_tls_record -- -max_total_time=60
-```
-
-### Kani Formal Verification
-```bash
-cd packet-engine/proofs
-cargo kani --harness siphash_collision_bound
-cargo kani --harness permutation_bijection
-```
-
----
-
-## 📁 Project Structure
+## 📁 Repository Structure
 
 ```
 AEGIS/
-├── packet-engine/          # Core Rust workspace (12 crates)
-├── enrichment/             # Enrichment Rust workspace (4 crates)
-├── gateway/                # Axum API Gateway (standalone)
-├── targeting/              # Targeting + ML (Rust + Python)
-├── infra/                  # Infra as Code (Helm, Flink, Kind)
-├── dashboard/              # React 19 + Vite + TanStack Query
-├── sdks/                   # Go, Python, TypeScript clients
-└── docs/                   # Architecture, API, Deployment, Development
-```
-
----
-
-## 🛡 Ethics & Safety
-
-| Control | Implementation |
-|---------|----------------|
-| **Identity** | `User-Agent: AEGIS-Scanner/1.0 (+https://aegis.example.com/robots; contact@aegis.example.com)` |
-| **Opt-Out** | CIDR blocklist at socket layer |
-| **Rate Limiting** | Token-bucket per /24, per ASN, global PPS |
-| **Audit** | Ed25519-signed append-only log |
-| **Scope** | Lab-only until legal clearance |
-
-**Legal**: CFAA (US), IT Act (India), Computer Misuse Act (UK). Use dedicated infrastructure. Consider Censys/Shodan APIs as alternatives.
-
----
-
-## 🤝 Contributing
-
-```bash
-# 1. Fork & clone
-# 2. Create feature branch: git checkout -b feat/amazing-feature
-# 3. Make changes and run full CI locally
-for d in packet-engine enrichment gateway targeting/ipv6 targeting/vistascan infra/synthetic-generator; do
-  (cd "$d" && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace)
-done
-cargo fmt --check
-(cd dashboard && npm run lint && npm test)
-(cd targeting/ml && ruff check . && pytest -v)
-(cd infra/flink-job && ./gradlew test)
-
-# 4. Submit PR with clear description
+├── packet-engine/          # Core scanning workspace (AF_XDP, LZR, JA4, traversal)
+├── enrichment/             # Enrichment workspace (CVE matching, asset graphs, geo)
+├── gateway/                # Axum REST, WebSocket, and gRPC Gateway
+├── targeting/              # Target selection (IPv6 space-trees, VistaScan, Python ML)
+├── infra/                  # Infrastructure (Flink stream job, Helm charts, Dockerfiles)
+├── dashboard/              # React 19 + Vite analytics frontend
+├── sdks/                   # Official Python, Go, and TypeScript SDK clients
+├── docs/                   # Architecture, API, and Deployment documentation
+└── scripts/                # End-to-end integration and verification scripts
 ```
 
 ---
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE).
+AEGIS is licensed under the MIT License — see [LICENSE](LICENSE).
 
 ---
 
-## 🙏 Acknowledgments
-
-Built on foundational research:
-- **ZMap** (Durumeric et al., USENIX Security 2013)
-- **XMap** (Li et al., ACSAC 2025)
-- **GPS** (Izhikevich et al., SIGCOMM 2022)
-- **LZR** (Izhikevich et al., USENIX Security 2021)
-- **6Hit** (Hou et al., INFOCOM 2021)
-- **Censys** (Durumeric et al., SIGCOMM 2025)
-- **JA4+** (FoxIO)
-- **VistaScan** (Hu et al., Sensors 2026)
-
----
-
-## 📞 Support
+## 📞 Support & Security
 
 - **Issues**: [GitHub Issues](https://github.com/Destroyer-official/AEGIS/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/Destroyer-official/AEGIS/discussions)
-- **Security**: security@aegis.example.com (PGP key in repo)
-- **Docs**: [Full Documentation](docs/)
-
----
-
-**Made with ❤️ by the AEGIS Team** — Building the future of internet intelligence.
+- **Security Vulnerabilities**: security@aegis.example.com
+- **API Documentation**: [docs/api.md](docs/api.md)

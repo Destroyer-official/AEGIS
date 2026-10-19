@@ -10,7 +10,7 @@ mod tenant;
 mod ws;
 
 use axum::{
-    extract::Extension,
+    extract::{Extension, State},
     http::StatusCode,
     middleware as axum_middleware,
     routing::{get, post},
@@ -220,7 +220,7 @@ async fn rate_limit_handler(
 
 async fn rate_limit_middleware(
     user: AuthUser,
-    Extension(limiter): Extension<Arc<TokenBucketRateLimiter>>,
+    State(limiter): State<Arc<TokenBucketRateLimiter>>,
     request: axum::http::Request<axum::body::Body>,
     next: axum::middleware::Next,
 ) -> Result<axum::response::Response, StatusCode> {
@@ -412,6 +412,9 @@ async fn main() {
         .merge(login_router)
         .merge(protected_routes)
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .layer(axum::middleware::from_fn(tenant_isolation_middleware))
+        .layer(axum::middleware::from_fn(audit_middleware))
+        .layer(axum::middleware::from_fn(trace_middleware))
         .layer(Extension(jwt_config))
         .layer(Extension(Arc::clone(&user_store)))
         .layer(Extension(Arc::clone(&trino)))
@@ -420,9 +423,6 @@ async fn main() {
         .layer(Extension(Arc::clone(&tenant_store)))
         .layer(Extension(Arc::clone(&audit_log)))
         .layer(cors)
-        .layer(axum::middleware::from_fn(trace_middleware))
-        .layer(axum::middleware::from_fn(audit_middleware))
-        .layer(axum::middleware::from_fn(tenant_isolation_middleware))
         .layer(TraceLayer::new_for_http());
 
     let grpc_addr: std::net::SocketAddr = std::env::var("GRPC_PORT")
