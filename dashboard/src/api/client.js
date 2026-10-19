@@ -33,7 +33,7 @@ export const authApi = {
 
 export const queryApi = {
   execute: (sql, limit = 100) =>
-    api.get('/query', { params: { sql, limit } }),
+    api.post('/query', { query: sql, limit }),
 };
 
 export const healthApi = {

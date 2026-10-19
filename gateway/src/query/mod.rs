@@ -26,6 +26,7 @@ impl Default for TrinoConfig {
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct TrinoQuery {
+    #[serde(alias = "sql")]
     pub query: String,
     pub catalog: Option<String>,
     pub schema: Option<String>,

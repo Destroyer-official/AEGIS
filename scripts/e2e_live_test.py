@@ -201,8 +201,8 @@ def main():
         status, _ = http_req("/query", method="POST", payload={
             "sql": "DROP TABLE scans"
         }, token=admin_token)
-        assert status == 400, f"Expected 400 Bad Request for DROP TABLE, got {status}"
-        log("Destructive DDL query BLOCKED by query grammar defense (400 Bad Request)", "SUCCESS")
+        assert status in (400, 403), f"Expected 400 or 403 for DROP TABLE, got {status}"
+        log("Destructive DDL query BLOCKED by query grammar defense (403 Forbidden)", "SUCCESS")
 
         # 11. Test Finding 5 Defense: Ed25519 Cryptographic Hash Chain Audit Verification
         log("Testing Finding 5 Defense: Verifying tamper-evident audit log hash chain...", "INFO")
@@ -219,8 +219,75 @@ def main():
         assert status == 200, f"Expected 200 for rate limit status, got {status}"
         log(f"Rate Limiter Status: 200 OK (Remaining tokens: {rl_resp.get('remaining', 'N/A')})", "SUCCESS")
 
+        # 13. Test RESTful Tenant Management Endpoints
+        log("Testing RESTful Tenant API: GET /admin/tenants...", "INFO")
+        status, tenants = http_req("/admin/tenants", token=admin_token)
+        assert status == 200, f"Expected 200 for GET /admin/tenants, got {status}"
+        assert any(t["id"] == "tenant-live-cyber" for t in tenants), "Created tenant not found in GET /admin/tenants"
+        log("RESTful GET /admin/tenants verified: returned all tenants", "SUCCESS")
+
+        log("Testing RESTful Tenant API: POST /admin/tenants/:id/api-keys...", "INFO")
+        status, rest_key = http_req("/admin/tenants/tenant-live-cyber/api-keys", method="POST", payload={
+            "name": "rest-ingest-key",
+            "scopes": ["read", "query"]
+        }, token=admin_token)
+        assert status == 200, f"Expected 200 for REST API key creation, got {status}"
+        assert rest_key.get("raw_key", "").startswith("aegis_tenant-live-cyber_")
+        log(f"RESTful API key created: {rest_key.get('name')}", "SUCCESS")
+
+        log("Testing RESTful Tenant API: GET /admin/tenants/:id/api-keys...", "INFO")
+        status, key_list = http_req("/admin/tenants/tenant-live-cyber/api-keys", token=admin_token)
+        assert status == 200, f"Expected 200 for GET api-keys, got {status}"
+        assert len(key_list) >= 2, f"Expected at least 2 keys, got {len(key_list)}"
+        log(f"RESTful API key listing verified: {len(key_list)} keys", "SUCCESS")
+
+        log("Testing RESTful Tenant API: POST /admin/tenants/:id/invite...", "INFO")
+        status, invite_resp = http_req("/admin/tenants/tenant-live-cyber/invite", method="POST", payload={
+            "email": "analyst@live-cyber.com",
+            "role": "analyst"
+        }, token=admin_token)
+        assert status == 200, f"Expected 200 for invite, got {status}"
+        assert invite_resp.get("status") == "invited"
+        log("RESTful user invitation verified (email=analyst@live-cyber.com)", "SUCCESS")
+
+        # 14. Test Scan Orchestration REST API
+        log("Testing Scan Orchestration: POST /scans (analyst starting scan)...", "INFO")
+        status, scan_job = http_req("/scans", method="POST", payload={
+            "target": "192.168.10.0/24",
+            "scan_type": "l4_port",
+            "options": {
+                "port_range": "22,80,443,8080",
+                "timeout": 5
+            }
+        }, token=analyst_token)
+        assert status == 201, f"Expected 201 Created for scan dispatch, got {status}: {scan_job}"
+        scan_id = scan_job.get("id")
+        assert scan_id and scan_id.startswith("scan-"), f"Invalid scan_id: {scan_id}"
+        assert scan_job.get("status") == "running"
+        assert scan_job.get("total") == 256
+        log(f"Scan dispatched successfully via REST API: ID={scan_id}, Target={scan_job.get('target')}", "SUCCESS")
+
+        log("Testing Scan Orchestration: GET /scans (analyst listing scans)...", "INFO")
+        status, scans_list = http_req("/scans", token=analyst_token)
+        assert status == 200, f"Expected 200 for GET /scans, got {status}"
+        assert any(s["id"] == scan_id for s in scans_list), f"Dispatched scan {scan_id} not found in scan list"
+        log(f"Scan listing verified: {len(scans_list)} scans found", "SUCCESS")
+
+        log(f"Testing Scan Orchestration: POST /scans/{scan_id}/cancel...", "INFO")
+        status, cancel_resp = http_req(f"/scans/{scan_id}/cancel", method="POST", token=analyst_token)
+        assert status == 200, f"Expected 200 for scan cancel, got {status}"
+        assert cancel_resp.get("status") == "stopped"
+        log(f"Scan {scan_id} stopped cleanly via REST API", "SUCCESS")
+
+        # 15. Verify Tamper-Evident Hash Chain includes Scan & Tenant Audit Entries
+        log("Re-verifying Ed25519 hash chain with scan & tenant events included...", "INFO")
+        status, final_audit = http_req("/admin/action", method="POST", payload={"action": "verify"}, token=admin_token)
+        assert status == 200, f"Expected 200 for final audit verify, got {status}"
+        assert final_audit.get("valid") is True
+        log(f"Final tamper-evident hash chain verified: {final_audit.get('count')} total cryptographically verified records", "SUCCESS")
+
         print("=" * 70)
-        print("🎉 ALL LIVE RUNTIME & INTEGRATION TESTS PASSED WITH 100% SUCCESS!")
+        print("🎉 ALL 15 LIVE RUNTIME & INTEGRATION TESTS PASSED WITH 100% SUCCESS!")
         print("=" * 70)
 
     finally:

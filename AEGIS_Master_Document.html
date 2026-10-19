@@ -81,7 +81,7 @@ hr { border: none; border-top: 2px solid #dee2e6; margin: 30px 0; }
 </style>
 </head>
 <body>
-<h1 id="master-architectural-blueprint-technical-specification-and-implementation-roadmap-for-a-max-intelligence-driven-internet-scanner">Master Architectural Blueprint, Technical Specification, and Implementation Roadmap for a  highly advance Intelligence-Driven Internet Scanner</h1>
+<h1 id="master-architectural-blueprint-technical-specification-and-implementation-roadmap-for-an-intelligence-driven-internet-scanner">Master Architectural Blueprint, Technical Specification, and Implementation Roadmap for an Intelligence-Driven Internet Scanner</h1>
 <p><strong>Document Version:</strong> 1.1<br />
 <strong>Classification:</strong> Master Reference Document<br />
 <strong>Consolidation Scope:</strong> 113 pages of primary technical documentation + 19-page research learning project synthesized into a single canonical reference<br />
@@ -89,7 +89,7 @@ hr { border: none; border-top: 2px solid #dee2e6; margin: 30px 0; }
 <hr />
 <h2 id="document-purpose-and-lineage">Document Purpose and Lineage</h2>
 <p>This master reference document synthesizes four independently authored research blueprints and system engineering reports into a unified, non-redundant architectural reference for a next-generation internet-wide scanning platform. Consolidating 113 pages of primary technical documentation, this report establishes a single canonical architecture by affirming consensus recommendations while explicitly evaluating and documenting architectural divergences as structured decision records.</p>
-<p>The resulting framework outlines a complete, from-scratch platform designed to operate at   max capabilities. The system deliberately avoids runtime or compile-time dependencies on legacy scanning utilities such as ZMap, Nmap, or Masscan. Instead, it leverages the underlying academic and empirical research—including XMap, HMap, 6SENSE, 6Hit, LZR, and GPS—as conceptual prior art to inform its custom Rust- and Go-based components.</p>
+<p>The resulting framework outlines a complete, from-scratch platform designed to operate at maximum capability. The system deliberately avoids runtime or compile-time dependencies on legacy scanning utilities such as ZMap, Nmap, or Masscan. Instead, it leverages the underlying academic and empirical research—including XMap, HMap, 6SENSE, 6Hit, LZR, and GPS—as conceptual prior art to inform its custom Rust- and Go-based components.</p>
 <p><strong>Consolidated Source Materials:</strong></p>
 <table>
 <thead>
@@ -126,7 +126,7 @@ hr { border: none; border-top: 2px solid #dee2e6; margin: 30px 0; }
 <h1 id="part-i-software-architecture">PART I: SOFTWARE ARCHITECTURE</h1>
 <hr />
 <h2 id="1-architectural-philosophy">1. Architectural Philosophy</h2>
-<p>The operational environment of  demands a fundamental departure from legacy brute-force packet blasting. The platform design is governed by four core architectural principles:</p>
+<p>The operational environment demands a fundamental departure from legacy brute-force packet blasting. The platform design is governed by four core architectural principles:</p>
 <h3 id="11-intelligence-over-brute-force">1.1 Intelligence over Brute Force</h3>
 <p>Exhaustive enumeration of the IPv6 address space (2^128 host addresses) is computationally impossible; a single /64 subnet contains 2^64 addresses, vastly exceeding the entire IPv4 address space (~4.3 billion addresses). Target selection must therefore function as an evidence-driven, adaptive search process powered by predictive statistical models and reinforcement learning rather than sequential sweeps.</p>
 <p>The research literature confirms this imperative: GPS (Izhikevich et al., SIGCOMM 2022) demonstrated that 92.5% of all IPv4 services across all 65,535 ports can be discovered with 131x less bandwidth than exhaustive scanning by using co-occurrence probabilistic models. For IPv6, 6Hit (Hou et al., INFOCOM 2021) demonstrated reinforcement learning-based target generation achieving 3.5%–11.5% hit rates—a 7.7%–630% improvement over state-of-the-art methods—by dynamically allocating exploration resources to high-density regions based on real-time scanning feedback.</p>

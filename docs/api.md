@@ -255,11 +255,79 @@ Content-Type: application/json
 > [!IMPORTANT]
 > The plaintext `raw_key` is generated via CSPRNG (`rand::rngs::OsRng`) and returned **only once** upon creation. The AEGIS server strictly stores only its SHA-256 cryptographic verifier. Subsequent key listing requests return metadata only.
 
+### 5.3 RESTful Tenant & User Administration
+
+In addition to RPC-style actions, AEGIS provides standard REST endpoints under `/admin/tenants`:
+
+| Method | Endpoint | Description | Required Role |
+|--------|----------|-------------|---------------|
+| `GET` | `/admin/tenants` | List all tenant configurations | Admin |
+| `POST` | `/admin/tenants` | Provision a new tenant | Admin |
+| `PUT` | `/admin/tenants/{id}` | Update tenant configuration & quotas | Admin |
+| `DELETE` | `/admin/tenants/{id}` | Delete a tenant | Admin |
+| `GET` | `/admin/tenants/{id}/api-keys` | List API keys for a tenant | Admin |
+| `POST` | `/admin/tenants/{id}/api-keys` | Generate a high-entropy CSPRNG API key | Admin |
+| `DELETE` | `/admin/tenants/{id}/api-keys/{key_id}` | Revoke an API key immediately | Admin |
+| `GET` | `/admin/tenants/{id}/audit-log` | Retrieve tenant audit log records | Admin |
+| `GET` | `/admin/tenants/{id}/audit-log/export` | Export tenant audit log JSON bundle | Admin |
+| `POST` | `/admin/tenants/{id}/invite` | Invite user (`viewer`, `analyst`, `admin`) | Admin |
+
 ---
 
-## 6. WebSocket Streaming
+## 6. Scan Orchestration API (Analyst+)
 
-### 6.1 Query Streaming
+### 6.1 Dispatch Scan Job
+```http
+POST /scans
+Authorization: Bearer <analyst-or-admin-token>
+Content-Type: application/json
+
+{
+  "target": "192.168.1.0/24",
+  "scan_type": "l4_port",
+  "options": {
+    "port_range": "1-1024",
+    "timeout": 5
+  }
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "id": "scan-9f82bc1a",
+  "tenant_id": "tenant-live-cyber",
+  "target": "192.168.1.0/24",
+  "scan_type": "l4_port",
+  "port_range": "1-1024",
+  "timeout": 5,
+  "status": "running",
+  "completed": 0,
+  "total": 256,
+  "elapsed": "0s",
+  "started_at": "2026-10-19T10:30:00Z"
+}
+```
+
+### 6.2 List Scans
+```http
+GET /scans
+Authorization: Bearer <analyst-or-admin-token>
+```
+Returns list of scans scoped to caller's tenant (or all scans for system admin).
+
+### 6.3 Cancel Scan Job
+```http
+POST /scans/{id}/cancel
+Authorization: Bearer <analyst-or-admin-token>
+```
+Stops an active scan job and records an audit log entry.
+
+---
+
+## 7. WebSocket Streaming
+
+### 7.1 Query Streaming
 ```javascript
 const ws = new WebSocket('ws://localhost:3000/ws/query', ['bearer', '<token>']);
 ws.onmessage = (event) => {
@@ -285,9 +353,9 @@ ws.send(JSON.stringify({
 
 ---
 
-## 7. gRPC API (Internal)
+## 8. gRPC API (Internal)
 
-### 7.1 Trino Query Service
+### 8.1 Trino Query Service
 ```protobuf
 service QueryService {
   rpc ExecuteQuery(QueryRequest) returns (QueryResponse);
@@ -321,7 +389,7 @@ message StreamChunk {
 
 ---
 
-## 8. Error Codes
+## 9. Error Codes
 
 | Code | Meaning | Resolution |
 |------|---------|------------|
@@ -337,7 +405,7 @@ message StreamChunk {
 
 ---
 
-## 9. Rate Limiting
+## 10. Rate Limiting
 
 | Tier | Requests/sec | Burst | Quota Type |
 |------|--------------|-------|------------|
@@ -357,7 +425,7 @@ Retry-After: 30
 
 ---
 
-## 10. Pagination
+## 11. Pagination
 
 All list endpoints support cursor pagination:
 ```http
@@ -375,7 +443,7 @@ GET /admin/users?action=list&limit=50&cursor=eyJpZCI6InRlbmFudC1hIn0=
 
 ---
 
-## 11. OpenAPI Specification
+## 12. OpenAPI Specification
 
 Full OpenAPI 3.1 spec available at:
 - **File:** `gateway/openapi.yaml`
@@ -383,7 +451,7 @@ Full OpenAPI 3.1 spec available at:
 
 ---
 
-## 12. SDKs
+## 13. SDKs
 
 | Language | Package | Install |
 |----------|---------|---------|
@@ -393,7 +461,7 @@ Full OpenAPI 3.1 spec available at:
 
 ---
 
-## 13. Example: Complete Workflow
+## 14. Example: Complete Workflow
 
 ```python
 from aegis import AegisClient
@@ -427,9 +495,10 @@ print(f"Exported {len(audit)} audit entries")
 
 ---
 
-## 14. Changelog
+## 15. Changelog
 
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2026-08-30 | Initial production release |
-| 1.1.0 | 2026-09-15 | Added VistaScan, LLM fingerprinting, audit API |
+| 1.0.2 | 2026-10-18 | Security hardening: Argon2id auth, SQL grammar protection, tamper-evident Ed25519 audit chain |
+| 1.1.0 | 2026-10-19 | Added VistaScan, Asset Explorer, RESTful Scan Orchestration & Tenant Admin APIs |

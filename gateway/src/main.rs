@@ -6,14 +6,15 @@ mod grpc_handler;
 mod middleware;
 mod query;
 mod rate_limit;
+mod scan;
 mod tenant;
 mod ws;
 
 use axum::{
-    extract::{Extension, State},
+    extract::{Extension, Path, State},
     http::StatusCode,
     middleware as axum_middleware,
-    routing::{get, post},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use chrono::Utc;
@@ -37,6 +38,7 @@ use query::{
     TrinoStatementStats,
 };
 use rate_limit::{rate_limit_status, RateLimitConfig, RateLimitStatus, TokenBucketRateLimiter};
+use scan::{CreateScanRequest, ScanJob, ScanOptions, ScanStore};
 use tenant::{
     query_quota_middleware, scan_quota_middleware, tenant_isolation_middleware,
     CreateApiKeyResponse, TenantApiKey, TenantConfig, TenantStore,
@@ -49,17 +51,25 @@ use tenant::{
         version = "0.1.0",
         description = "AEGIS Platform REST/WebSocket/gRPC Gateway"
     ),
-    paths(health, login, query_handler, rate_limit_handler, admin_action, manage_users),
+    paths(
+        health, login, query_handler, rate_limit_handler, admin_action, manage_users,
+        list_tenants_handler, create_tenant_handler, update_tenant_handler, delete_tenant_handler,
+        list_tenant_api_keys_handler, create_tenant_api_key_handler, revoke_tenant_api_key_handler,
+        tenant_audit_log_handler, tenant_audit_log_export_handler, tenant_invite_user_handler,
+        list_scans_handler, start_scan_handler, cancel_scan_handler
+    ),
     components(schemas(
         HealthResponse, TokenResponse, LoginRequest, QueryResult, RateLimitStatus,
         TrinoQuery, TrinoStatementStats, ColumnDef, Claims, ErrorResponse,
-        CreateApiKeyResponse, TenantApiKey
+        CreateApiKeyResponse, TenantApiKey, TenantConfig, CreateApiKeyRequest,
+        InviteUserRequest, CreateScanRequest, ScanJob, ScanOptions
     )),
     tags(
         (name = "health", description = "Health check endpoints"),
         (name = "auth", description = "Authentication endpoints"),
         (name = "query", description = "Trino query endpoints"),
         (name = "admin", description = "Admin-only endpoints"),
+        (name = "scans", description = "Scan orchestration endpoints"),
         (name = "rate-limit", description = "Rate limit status")
     )
 )]
@@ -334,6 +344,357 @@ async fn manage_users(
     }
 }
 
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct CreateApiKeyRequest {
+    pub name: String,
+    #[serde(default)]
+    pub scopes: Vec<String>,
+}
+
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct InviteUserRequest {
+    pub email: String,
+    #[serde(default = "default_invite_role")]
+    pub role: String,
+}
+
+fn default_invite_role() -> String {
+    "viewer".into()
+}
+
+#[utoipa::path(
+    get,
+    path = "/admin/tenants",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, description = "List all tenants", body = Vec<TenantConfig>),
+        (status = 403, description = "Requires manage_users permission", body = ErrorResponse)
+    )
+)]
+async fn list_tenants_handler(
+    user: AuthUser,
+    Extension(store): Extension<Arc<TenantStore>>,
+) -> Result<Json<Vec<TenantConfig>>, StatusCode> {
+    user.require_manage_users()?;
+    let tenants = store.get_all_tenants().await;
+    Ok(Json(tenants))
+}
+
+#[utoipa::path(
+    post,
+    path = "/admin/tenants",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    request_body = TenantConfig,
+    responses(
+        (status = 200, description = "Tenant created", body = TenantConfig),
+        (status = 400, description = "Invalid configuration", body = ErrorResponse),
+        (status = 403, description = "Requires manage_users permission", body = ErrorResponse)
+    )
+)]
+async fn create_tenant_handler(
+    user: AuthUser,
+    Extension(store): Extension<Arc<TenantStore>>,
+    Json(config): Json<TenantConfig>,
+) -> Result<Json<TenantConfig>, StatusCode> {
+    user.require_manage_users()?;
+    store.create_tenant(config.clone()).await?;
+    Ok(Json(config))
+}
+
+#[utoipa::path(
+    put,
+    path = "/admin/tenants/{id}",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    params(("id" = String, Path, description = "Tenant identifier")),
+    request_body = TenantConfig,
+    responses(
+        (status = 200, description = "Tenant updated", body = TenantConfig),
+        (status = 400, description = "Invalid configuration", body = ErrorResponse),
+        (status = 404, description = "Tenant not found", body = ErrorResponse)
+    )
+)]
+async fn update_tenant_handler(
+    user: AuthUser,
+    Path(id): Path<String>,
+    Extension(store): Extension<Arc<TenantStore>>,
+    Json(config): Json<TenantConfig>,
+) -> Result<Json<TenantConfig>, StatusCode> {
+    user.require_manage_users()?;
+    store.update_tenant(&id, config.clone()).await?;
+    Ok(Json(config))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/admin/tenants/{id}",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    params(("id" = String, Path, description = "Tenant identifier")),
+    responses(
+        (status = 200, description = "Tenant deleted"),
+        (status = 404, description = "Tenant not found", body = ErrorResponse)
+    )
+)]
+async fn delete_tenant_handler(
+    user: AuthUser,
+    Path(id): Path<String>,
+    Extension(store): Extension<Arc<TenantStore>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    user.require_manage_users()?;
+    store.delete_tenant(&id).await?;
+    Ok(Json(serde_json::json!({"status": "deleted", "id": id})))
+}
+
+#[utoipa::path(
+    get,
+    path = "/admin/tenants/{id}/api-keys",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    params(("id" = String, Path, description = "Tenant identifier")),
+    responses(
+        (status = 200, description = "List tenant API keys", body = Vec<TenantApiKey>),
+        (status = 403, description = "Requires manage_users permission", body = ErrorResponse)
+    )
+)]
+async fn list_tenant_api_keys_handler(
+    user: AuthUser,
+    Path(id): Path<String>,
+    Extension(store): Extension<Arc<TenantStore>>,
+) -> Result<Json<Vec<TenantApiKey>>, StatusCode> {
+    user.require_manage_users()?;
+    let keys = store.list_api_keys(&id).await;
+    Ok(Json(keys))
+}
+
+#[utoipa::path(
+    post,
+    path = "/admin/tenants/{id}/api-keys",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    params(("id" = String, Path, description = "Tenant identifier")),
+    request_body = CreateApiKeyRequest,
+    responses(
+        (status = 200, description = "API key created", body = CreateApiKeyResponse),
+        (status = 404, description = "Tenant not found", body = ErrorResponse)
+    )
+)]
+async fn create_tenant_api_key_handler(
+    user: AuthUser,
+    Path(id): Path<String>,
+    Extension(store): Extension<Arc<TenantStore>>,
+    Json(body): Json<CreateApiKeyRequest>,
+) -> Result<Json<CreateApiKeyResponse>, StatusCode> {
+    user.require_manage_users()?;
+    let scopes = if body.scopes.is_empty() {
+        vec!["read".to_string(), "query".to_string()]
+    } else {
+        body.scopes
+    };
+    let key = store.create_api_key(&id, &body.name, scopes).await?;
+    Ok(Json(key))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/admin/tenants/{id}/api-keys/{key_id}",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    params(
+        ("id" = String, Path, description = "Tenant identifier"),
+        ("key_id" = String, Path, description = "API Key UUID")
+    ),
+    responses(
+        (status = 200, description = "API key revoked"),
+        (status = 404, description = "Key not found", body = ErrorResponse)
+    )
+)]
+async fn revoke_tenant_api_key_handler(
+    user: AuthUser,
+    Path((_id, key_id)): Path<(String, String)>,
+    Extension(store): Extension<Arc<TenantStore>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    user.require_manage_users()?;
+    store.revoke_api_key(&key_id).await?;
+    Ok(Json(
+        serde_json::json!({"status": "revoked", "key_id": key_id}),
+    ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/admin/tenants/{id}/audit-log",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    params(("id" = String, Path, description = "Tenant identifier")),
+    responses(
+        (status = 200, description = "Tenant audit log entries")
+    )
+)]
+async fn tenant_audit_log_handler(
+    user: AuthUser,
+    Path(id): Path<String>,
+    Extension(audit): Extension<Arc<AuditLog>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    user.require_manage_users()?;
+    let entries = audit.export_entries(Some(&id)).await;
+    Ok(Json(serde_json::to_value(entries).unwrap()))
+}
+
+#[utoipa::path(
+    get,
+    path = "/admin/tenants/{id}/audit-log/export",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    params(("id" = String, Path, description = "Tenant identifier")),
+    responses(
+        (status = 200, description = "Tenant audit log export")
+    )
+)]
+async fn tenant_audit_log_export_handler(
+    user: AuthUser,
+    Path(id): Path<String>,
+    Extension(audit): Extension<Arc<AuditLog>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    user.require_manage_users()?;
+    let entries = audit.export_entries(Some(&id)).await;
+    Ok(Json(serde_json::to_value(entries).unwrap()))
+}
+
+#[utoipa::path(
+    post,
+    path = "/admin/tenants/{id}/invite",
+    tag = "admin",
+    security(("bearerAuth" = [])),
+    params(("id" = String, Path, description = "Tenant identifier")),
+    request_body = InviteUserRequest,
+    responses(
+        (status = 200, description = "User invited")
+    )
+)]
+async fn tenant_invite_user_handler(
+    user: AuthUser,
+    Path(id): Path<String>,
+    Extension(audit): Extension<Arc<AuditLog>>,
+    Json(body): Json<InviteUserRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    user.require_manage_users()?;
+    audit
+        .log_request(
+            &id,
+            &user.claims.sub,
+            "POST",
+            "/admin/tenants/invite",
+            200,
+            1,
+            "internal",
+            "aegis-gateway",
+        )
+        .await;
+    Ok(Json(serde_json::json!({
+        "status": "invited",
+        "tenant_id": id,
+        "email": body.email,
+        "role": body.role,
+    })))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scans",
+    tag = "scans",
+    security(("bearerAuth" = [])),
+    responses(
+        (status = 200, description = "List scans", body = Vec<ScanJob>),
+        (status = 401, description = "Unauthorized", body = ErrorResponse)
+    )
+)]
+async fn list_scans_handler(
+    user: AuthUser,
+    Extension(scan_store): Extension<Arc<ScanStore>>,
+) -> Result<Json<Vec<ScanJob>>, StatusCode> {
+    user.require_query()?;
+    let is_admin = user.claims.role == "admin";
+    let scans = scan_store
+        .list_scans(&user.claims.tenant_id, is_admin)
+        .await;
+    Ok(Json(scans))
+}
+
+#[utoipa::path(
+    post,
+    path = "/scans",
+    tag = "scans",
+    security(("bearerAuth" = [])),
+    request_body = CreateScanRequest,
+    responses(
+        (status = 201, description = "Scan dispatched", body = ScanJob),
+        (status = 400, description = "Invalid target or parameters", body = ErrorResponse),
+        (status = 403, description = "Insufficient quota or permissions", body = ErrorResponse)
+    )
+)]
+async fn start_scan_handler(
+    user: AuthUser,
+    Extension(scan_store): Extension<Arc<ScanStore>>,
+    Extension(audit): Extension<Arc<AuditLog>>,
+    Json(body): Json<CreateScanRequest>,
+) -> Result<(StatusCode, Json<ScanJob>), StatusCode> {
+    user.require_scan()?;
+    let job = scan_store.create_scan(&user.claims.tenant_id, body).await?;
+    audit
+        .log_request(
+            &user.claims.tenant_id,
+            &user.claims.sub,
+            "POST",
+            "/scans",
+            201,
+            1,
+            "internal",
+            "aegis-gateway",
+        )
+        .await;
+    Ok((StatusCode::CREATED, Json(job)))
+}
+
+#[utoipa::path(
+    post,
+    path = "/scans/{id}/cancel",
+    tag = "scans",
+    security(("bearerAuth" = [])),
+    params(("id" = String, Path, description = "Scan identifier")),
+    responses(
+        (status = 200, description = "Scan cancelled", body = ScanJob),
+        (status = 404, description = "Scan not found", body = ErrorResponse)
+    )
+)]
+async fn cancel_scan_handler(
+    user: AuthUser,
+    Path(id): Path<String>,
+    Extension(scan_store): Extension<Arc<ScanStore>>,
+    Extension(audit): Extension<Arc<AuditLog>>,
+) -> Result<Json<ScanJob>, StatusCode> {
+    user.require_scan()?;
+    let is_admin = user.claims.role == "admin";
+    let job = scan_store
+        .cancel_scan(&id, &user.claims.tenant_id, is_admin)
+        .await?;
+    audit
+        .log_request(
+            &user.claims.tenant_id,
+            &user.claims.sub,
+            "POST",
+            &format!("/scans/{}/cancel", id),
+            200,
+            1,
+            "internal",
+            "aegis-gateway",
+        )
+        .await;
+    Ok(Json(job))
+}
+
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
@@ -356,6 +717,7 @@ async fn main() {
     let rate_limiter = Arc::new(TokenBucketRateLimiter::new(rate_limit_config));
     let tenant_store = Arc::new(TenantStore::new());
     let audit_log = Arc::new(AuditLog::new("audit-logs"));
+    let scan_store = Arc::new(ScanStore::new());
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -371,11 +733,49 @@ async fn main() {
     let admin_routes = Router::new()
         .route("/admin/action", post(admin_action))
         .route("/admin/users", post(manage_users))
+        .route(
+            "/admin/tenants",
+            get(list_tenants_handler).post(create_tenant_handler),
+        )
+        .route(
+            "/admin/tenants/:id",
+            put(update_tenant_handler).delete(delete_tenant_handler),
+        )
+        .route(
+            "/admin/tenants/:id/api-keys",
+            get(list_tenant_api_keys_handler).post(create_tenant_api_key_handler),
+        )
+        .route(
+            "/admin/tenants/:id/api-keys/:key_id",
+            delete(revoke_tenant_api_key_handler),
+        )
+        .route(
+            "/admin/tenants/:id/audit-log",
+            get(tenant_audit_log_handler),
+        )
+        .route(
+            "/admin/tenants/:id/audit-log/export",
+            get(tenant_audit_log_export_handler),
+        )
+        .route(
+            "/admin/tenants/:id/invite",
+            post(tenant_invite_user_handler),
+        )
         .route_layer(axum_middleware::from_fn_with_state(
             require_admin(jwt_config.clone()),
             authz_middleware,
+        ));
+
+    let scan_routes = Router::new()
+        .route("/scans", get(list_scans_handler).post(start_scan_handler))
+        .route("/scans/:id/cancel", post(cancel_scan_handler))
+        .route("/scans/:id", delete(cancel_scan_handler))
+        .route_layer(axum_middleware::from_fn_with_state(
+            require_analyst(jwt_config.clone()),
+            authz_middleware,
         ))
-        .layer(axum::middleware::from_fn(scan_quota_middleware));
+        .layer(axum::middleware::from_fn(scan_quota_middleware))
+        .layer(Extension(Arc::clone(&scan_store)));
 
     let analyst_routes = Router::new()
         .route("/query", post(query_handler))
@@ -396,6 +796,7 @@ async fn main() {
     let protected_routes = Router::new()
         .merge(admin_routes)
         .merge(analyst_routes)
+        .merge(scan_routes)
         .merge(viewer_routes)
         .route_layer(axum_middleware::from_fn_with_state(
             Arc::clone(&rate_limiter),
@@ -422,6 +823,7 @@ async fn main() {
         .layer(Extension(Arc::clone(&rate_limiter)))
         .layer(Extension(Arc::clone(&tenant_store)))
         .layer(Extension(Arc::clone(&audit_log)))
+        .layer(Extension(Arc::clone(&scan_store)))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 

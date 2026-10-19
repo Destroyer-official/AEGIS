@@ -1,4 +1,4 @@
-# Master Architectural Blueprint, Technical Specification, and Implementation Roadmap for a   Intelligence-Driven Internet Scanner
+# Master Architectural Blueprint, Technical Specification, and Implementation Roadmap for an Intelligence-Driven Internet Scanner
 
 **Document Version:** 1.1  
 **Classification:** Master Reference Document  
@@ -11,7 +11,7 @@
 
 This master reference document synthesizes four independently authored research blueprints and system engineering reports into a unified, non-redundant architectural reference for a next-generation internet-wide scanning platform. Consolidating 113 pages of primary technical documentation, this report establishes a single canonical architecture by affirming consensus recommendations while explicitly evaluating and documenting architectural divergences as structured decision records.
 
-The resulting framework outlines a complete, from-scratch platform designed to operate at  max capabilities. The system deliberately avoids runtime or compile-time dependencies on legacy scanning utilities such as ZMap, Nmap, or Masscan. Instead, it leverages the underlying academic and empirical research—including XMap, HMap, 6SENSE, 6Hit, LZR, and GPS—as conceptual prior art to inform its custom Rust- and Go-based components.
+The resulting framework outlines a complete, from-scratch platform designed to operate at maximum capability. The system deliberately avoids runtime or compile-time dependencies on legacy scanning utilities such as ZMap, Nmap, or Masscan. Instead, it leverages the underlying academic and empirical research—including XMap, HMap, 6SENSE, 6Hit, LZR, and GPS—as conceptual prior art to inform its custom Rust- and Go-based components.
 
 **Consolidated Source Materials:**
 
@@ -30,7 +30,7 @@ The resulting framework outlines a complete, from-scratch platform designed to o
 
 ## 1. Architectural Philosophy
 
-The operational environment of  a fundamental departure from legacy brute-force packet blasting. The platform design is governed by four core architectural principles:
+The operational environment represents a fundamental departure from legacy brute-force packet blasting. The platform design is governed by four core architectural principles:
 
 ### 1.1 Intelligence over Brute Force
 

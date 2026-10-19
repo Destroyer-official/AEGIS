@@ -76,13 +76,29 @@ AEGIS PLATFORM — LIVE END-TO-END SYSTEM INTEGRATION TEST
 [SUCCESS] ✅ High-entropy CSPRNG API key created: aegis_tenant-live-cy... (Single-use secret delivered, hash kept private)
 [INFO] ℹ️ Testing Finding 2 Defense: SQL Injection Statement Chaining Prevention...
 [SUCCESS] ✅ SQL injection chaining attack BLOCKED by query grammar defense (400 Bad Request)
-[SUCCESS] ✅ Destructive DDL query BLOCKED by query grammar defense (400 Bad Request)
+[SUCCESS] ✅ Destructive DDL query BLOCKED by query grammar defense (403 Forbidden)
 [INFO] ℹ️ Testing Finding 5 Defense: Verifying tamper-evident audit log hash chain...
-[SUCCESS] ✅ Audit log verified: 10 records in valid Ed25519 cryptographic hash chain
+[SUCCESS] ✅ Audit log verified: 74 records in valid Ed25519 cryptographic hash chain
 [INFO] ℹ️ Checking Rate Limiter status...
 [SUCCESS] ✅ Rate Limiter Status: 200 OK (Remaining tokens: 1)
+[INFO] ℹ️ Testing RESTful Tenant API: GET /admin/tenants...
+[SUCCESS] ✅ RESTful GET /admin/tenants verified: returned all tenants
+[INFO] ℹ️ Testing RESTful Tenant API: POST /admin/tenants/:id/api-keys...
+[SUCCESS] ✅ RESTful API key created: rest-ingest-key
+[INFO] ℹ️ Testing RESTful Tenant API: GET /admin/tenants/:id/api-keys...
+[SUCCESS] ✅ RESTful API key listing verified: 2 keys
+[INFO] ℹ️ Testing RESTful Tenant API: POST /admin/tenants/:id/invite...
+[SUCCESS] ✅ RESTful user invitation verified (email=analyst@live-cyber.com)
+[INFO] ℹ️ Testing Scan Orchestration: POST /scans (analyst starting scan)...
+[SUCCESS] ✅ Scan dispatched successfully via REST API: ID=scan-2d510e59, Target=192.168.10.0/24
+[INFO] ℹ️ Testing Scan Orchestration: GET /scans (analyst listing scans)...
+[SUCCESS] ✅ Scan listing verified: 2 scans found
+[INFO] ℹ️ Testing Scan Orchestration: POST /scans/scan-2d510e59/cancel...
+[SUCCESS] ✅ Scan scan-2d510e59 stopped cleanly via REST API
+[INFO] ℹ️ Re-verifying Ed25519 hash chain with scan & tenant events included...
+[SUCCESS] ✅ Final tamper-evident hash chain verified: 86 total cryptographically verified records
 ======================================================================
-🎉 ALL LIVE RUNTIME & INTEGRATION TESTS PASSED WITH 100% SUCCESS!
+🎉 ALL 15 LIVE RUNTIME & INTEGRATION TESTS PASSED WITH 100% SUCCESS!
 ======================================================================
 ```
 
@@ -221,7 +237,7 @@ Every check in AEGIS is verified locally and through strict CI gates (no failure
 
 | Component | Test Runner | Scope | Results |
 |---|---|---|---|
-| **Gateway** | `cargo test` | Argon2id auth, audit hash-chain, SQL defense, rate limiter, tenant CRUD | **19 passed; 0 failed** |
+| **Gateway** | `cargo test` | Argon2id auth, audit hash-chain, SQL defense, rate limiter, REST scans & tenants | **21 passed; 0 failed** |
 | **Enrichment** | `cargo test --workspace` | CVE correlation, geolocation inference, multi-tier cache, asset graphs | **90 passed; 0 failed** |
 | **Packet Engine** | `cargo test --workspace` | JA4+ fingerprinting, LZR reclassification, cyclic traversal, AF_XDP rings | **154 passed; 0 failed** |
 | **Targeting IPv6** | `cargo test --workspace` | Space-tree prefix partitioning, 6Hit reward computation | **11 passed; 0 failed** |
@@ -229,7 +245,7 @@ Every check in AEGIS is verified locally and through strict CI gates (no failure
 | **Python ML** | `pytest -v` | Dueling DQN, drift monitor, fail-closed ONNX export | **7 passed; 0 failed** |
 | **Dashboard** | `vitest run` | SQL injection sanitization, chart data provenance indicators | **6 passed; 0 failed** |
 | **Java Flink** | `./gradlew test` | Stateful event deduplication, Iceberg sink | **Passed** |
-| **Live E2E** | `python scripts/e2e_live_test.py` | Live HTTP socket test across all security and data layers | **12 passed; 0 failed** |
+| **Live E2E** | `python scripts/e2e_live_test.py` | Live HTTP socket test across all security and data layers | **15 passed; 0 failed** |
 
 ---
 

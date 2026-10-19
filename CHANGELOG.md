@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-10-19
+
+### Added
+- **Asset Explorer Component**: Production-ready React 19 interface (`AssetExplorer.jsx`) providing live multi-attribute filtering, IP subnet range inspection, TLS JA4 fingerprint correlation, CVE badge drilldown, and direct Trino SQL query execution.
+- **RESTful Scan Orchestration**: Dedicated REST endpoints (`GET /scans`, `POST /scans`, `POST /scans/{id}/cancel`) supporting target validation, tenant scan quota enforcement (`check_scan_quota`), in-memory and distributed scan lifecycle tracking, and cryptographic audit log emission.
+- **RESTful Tenant & Key Management**: Native REST endpoints under `/admin/tenants` (`GET`, `POST`, `PUT`, `DELETE`, `/api-keys`, `/audit-log`, `/invite`), eliminating client-server route mismatches.
+- **Expanded Live E2E Integration Suite**: Expanded `scripts/e2e_live_test.py` to 15 real HTTP/REST assertions across live network sockets verifying tenant provisioning, API key generation, query injection defense, and scan lifecycle management.
+
+---
+
 ## [1.0.2] - 2026-10-19
 
 ### Security & Hardening

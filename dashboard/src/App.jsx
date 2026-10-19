@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import HealthStatus from './components/HealthStatus';
 import QueryEditor from './components/QueryEditor';
 import { HostTimelineChart, VulnerabilityChart } from './components/Charts';
+import AssetExplorer from './pages/AssetExplorer';
 import ScanOrchestration from './pages/ScanOrchestration';
 import TenantAdmin from './pages/TenantAdmin';
 import './App.css';
@@ -45,15 +46,6 @@ function QueryPage() {
   );
 }
 
-function AssetsPage() {
-  return (
-    <div className="page">
-      <h2>Asset Explorer</h2>
-      <p>Asset lookup and filtering will be implemented here.</p>
-    </div>
-  );
-}
-
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -62,7 +54,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/query" element={<QueryPage />} />
           <Route path="/scans" element={<ScanOrchestration />} />
-          <Route path="/assets" element={<AssetsPage />} />
+          <Route path="/assets" element={<AssetExplorer />} />
           <Route path="/admin/tenants" element={<TenantAdmin />} />
         </Routes>
       </BrowserRouter>

@@ -46,6 +46,10 @@ impl Role {
         matches!(self, Role::Admin | Role::Analyst)
     }
 
+    pub fn can_scan(&self) -> bool {
+        matches!(self, Role::Admin | Role::Analyst)
+    }
+
     pub fn can_write(&self) -> bool {
         matches!(self, Role::Admin)
     }
@@ -159,6 +163,13 @@ impl AuthUser {
     pub fn require_query(&self) -> Result<(), StatusCode> {
         self.role()
             .filter(|r| r.can_query())
+            .ok_or(StatusCode::FORBIDDEN)
+            .map(|_| ())
+    }
+
+    pub fn require_scan(&self) -> Result<(), StatusCode> {
+        self.role()
+            .filter(|r| r.can_scan())
             .ok_or(StatusCode::FORBIDDEN)
             .map(|_| ())
     }

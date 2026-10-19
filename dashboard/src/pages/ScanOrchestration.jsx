@@ -218,6 +218,28 @@ export default function ScanOrchestration() {
 
   connectWsRef.current = connectWebSocket;
 
+  const fetchScans = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('aegis_token');
+      const res = await fetch(`${API_BASE}/scans`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setScans(data);
+        if (data.length > 0 && !activeScan) {
+          setActiveScan(data[0]);
+        }
+      }
+    } catch {
+      // Fallback
+    }
+  }, [activeScan]);
+
+  useEffect(() => {
+    fetchScans();
+  }, [fetchScans]);
+
   useEffect(() => {
     return () => {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
@@ -234,30 +256,25 @@ export default function ScanOrchestration() {
       const cleanPorts = sanitizePortRange(scanConfig.options?.port_range || '1-1024');
       const cleanTimeout = Math.min(Math.max(parseInt(scanConfig.options?.timeout) || 5, 1), 60);
 
-      const res = await fetch(`${API_BASE}/query`, {
+      const res = await fetch(`${API_BASE}/scans`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          query: `INSERT INTO aegis.scans (target, scan_type, port_range, timeout, status) VALUES ('${cleanTarget}', '${cleanType}', '${cleanPorts}', ${cleanTimeout}, 'running')`,
+          target: cleanTarget,
+          scan_type: cleanType,
+          options: {
+            port_range: cleanPorts,
+            timeout: cleanTimeout,
+          },
         }),
       });
 
       if (res.ok) {
-        const data = await res.json();
-        const newScan = {
-          id: data.query_id || `scan-${Date.now()}`,
-          target: cleanTarget,
-          scan_type: cleanType,
-          status: 'running',
-          completed: 0,
-          total: 0,
-          elapsed: '0s',
-          started_at: new Date().toISOString(),
-        };
-        setScans((prev) => [newScan, ...prev]);
+        const newScan = await res.json();
+        setScans((prev) => [newScan, ...prev.filter((s) => s.id !== newScan.id)]);
         setActiveScan(newScan);
         setResults([]);
         setTimeline([]);
@@ -272,10 +289,10 @@ export default function ScanOrchestration() {
 
   const handleStopScan = async (scanId) => {
     setScans((prev) =>
-      prev.map((s) => s.id === scanId ? { ...s, status: 'stopped' } : s)
+      prev.map((s) => (s.id === scanId ? { ...s, status: 'stopped' } : s))
     );
     if (activeScan?.id === scanId) {
-      setActiveScan((prev) => prev ? { ...prev, status: 'stopped' } : null);
+      setActiveScan((prev) => (prev ? { ...prev, status: 'stopped' } : null));
     }
 
     // Send backend cancellation over active WebSocket and HTTP
@@ -286,13 +303,12 @@ export default function ScanOrchestration() {
 
     try {
       const token = localStorage.getItem('aegis_token');
-      await fetch(`${API_BASE}/admin/action`, {
+      await fetch(`${API_BASE}/scans/${scanId}/cancel`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'cancel_scan', scan_id: scanId }),
       });
     } catch {
       console.warn('Backend scan cancellation notification completed');
